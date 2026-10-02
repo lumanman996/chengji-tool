@@ -19,13 +19,15 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import yaml
 
-from . import REPO, __version__, license as lic
+from . import CONTACT, REPO, __version__, license as lic
 from . import service as sv
 from . import teachers as tt
 from .config import load_school, load_teachers
 from .paths import ROOT, ensure_layout
 
-UI_FILE = Path(__file__).resolve().parent / "ui" / "index.html"
+UI_DIR = Path(__file__).resolve().parent / "ui"
+UI_FILE = UI_DIR / "index.html"
+STATIC = {"/wechat-qr.png": ("wechat-qr.png", "image/png")}        # 界面用到的图片
 
 
 def newer_version(a: str, b: str) -> bool:
@@ -118,7 +120,7 @@ class App:
         loc = self._local()
         return {"version": __version__, "school": s.name, "nativeDialog": self.window is not None,
                 "firstRun": not loc.get("已引导") and not loc.get("学校") and not sv.list_runs(self.output, 1),
-                "fontSize": loc.get("界面字号") or "标准", "root": friendly_path(self.root), "hasSample": (self.root / "samples" / SAMPLE[0]).is_file(), "license": lic.status(), "recent": sv.list_runs(self.output),
+                "contact": CONTACT, "fontSize": loc.get("界面字号") or "标准", "root": friendly_path(self.root), "hasSample": (self.root / "samples" / SAMPLE[0]).is_file(), "license": lic.status(), "recent": sv.list_runs(self.output),
                 "templates": list(s.grade_subjects), "pdfDefaults": s.pdf_sections, "hasTeacherTable": self.teacher.is_file()}
 
     def api_welcome(self, body):
@@ -394,6 +396,12 @@ class App:
         latest = str(data.get("tag_name") or "").lstrip("vV")
         return {"current": __version__, "latest": latest, "newer": newer_version(latest, __version__)}
 
+    def api_open_issues(self, _=None):
+        if not os.environ.get("CHENGJI_NO_OPEN"):
+            import webbrowser
+            webbrowser.open(CONTACT["issues"])
+        return {}
+
     def api_open_releases(self, _=None):
         if not os.environ.get("CHENGJI_NO_OPEN"):
             import webbrowser
@@ -424,9 +432,12 @@ def make_handler(app: App, token: str):
             self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"))
 
         def do_GET(self):
-            if urlparse(self.path).path in ("/", "/index.html"):
+            path = urlparse(self.path).path
+            if path in ("/", "/index.html"):
                 html = UI_FILE.read_text(encoding="utf-8").replace("__TOKEN__", token)
                 self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
+            elif path in STATIC and (UI_DIR / STATIC[path][0]).is_file():
+                self._send(200, (UI_DIR / STATIC[path][0]).read_bytes(), STATIC[path][1])
             else:
                 self._send(404, b"{}")
 

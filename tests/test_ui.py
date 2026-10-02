@@ -138,7 +138,8 @@ def test_trial_expired_then_activate(app, page, tmp_path, monkeypatch):
     assert "微信" in page.inner_text("#export .lock .contactBox")        # 锁定提示里写着找谁要激活码
     page.click("#export .lock button.pri"); page.wait_for_selector("#mask.on")
     assert page.inner_text("#machine") == impl.machine_code()
-    assert "申请激活码请联系" in page.inner_text("#mask .contactBox")
+    assert "915274394" in page.inner_text("#mask .actqr")                 # 激活窗口里有微信号和二维码
+    assert page.evaluate("document.querySelector('#mask .actqr img').naturalWidth") > 100
     page.fill("#code", "AAAAA-BBBBB"); page.click("#actBtn")
     page.wait_for_function("document.querySelector('#actErr').textContent.length > 0")
     code = keygen.make_code(impl.machine_code(), dt.date.today() + dt.timedelta(days=365))
@@ -508,3 +509,17 @@ def test_wizard_steps_all_visible(app, page):
     steps = page.locator(".steps .step")
     assert steps.count() == 3 and all(steps.nth(i).is_visible() for i in range(3))
     assert ["导入登分表" in steps.nth(0).inner_text(), "确认设置" in steps.nth(1).inner_text(), "查看结果" in steps.nth(2).inner_text()] == [True] * 3
+
+
+def test_contact_info(app, page):
+    """联系方式：帮助页有微信、邮箱和二维码（图片要真的能显示出来）。"""
+    root, url = app
+    page.goto(url); page.wait_for_selector("#recent .li")
+    page.click('#nav button[data-p="help"]')
+    page.click('.toc a[data-h="h8"]')
+    box = page.inner_text("#help")
+    assert "联系方式" in box and "915274394" in box and "zhaihuibo@gmail.com" in box
+    page.wait_for_function("document.querySelector('#qrHelp').complete")
+    assert page.evaluate("document.querySelector('#qrHelp').naturalWidth") == 353       # 二维码原图宽度
+    page.click('#help [data-copy="email"]'); page.wait_for_selector("#toast.on")
+    assert "已复制邮箱" in page.inner_text("#toast")
