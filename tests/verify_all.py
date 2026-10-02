@@ -24,7 +24,10 @@ CASES = [("七年级", "平时", None, "", FULL),
          ("八年级", "平时", None, "", FULL),
          ("九年级", "平时", None, PREV, ""),
          ("九年级", "中考", 0.8, "", ""),          # 只有 7 科的表用中考方案（会提示少了 3 科，照样要算对）
-         ("中考", "中考", 0.8, "", FULL)]
+         ("中考", "中考", 0.8, "", FULL),
+         ("九年级+新科目", "平时", None, PREV, "信息技术=50"),   # 登分表里加一门科目总表没有的科目
+         ("九年级+改比例", "平时", None, PREV, ""),               # 在界面里改过比例（平时方案加了进线率、前10名加分）
+         ("九年级+改比例", "中考", 0.8, PREV, "")]                # 中考方案加了增值评价、去掉参考率
 
 
 def find_soffice() -> str:
@@ -43,17 +46,41 @@ def main():
         tmp = Path(tmp)
         for i, (grade, scheme, ratio, prev, full) in enumerate(CASES):
             scores = str(ROOT / "samples" / f"示例登分表_{grade}.xlsx")
+            if grade.endswith("+新科目"):                       # 临时造一张：九年级示例后面加一列“信息技术”
+                import openpyxl
+                wb = openpyxl.load_workbook(ROOT / "samples" / "示例登分表_九年级.xlsx")
+                ws = wb.active
+                c = ws.max_column + 1
+                ws.cell(2, c, "信息技术")
+                for r in range(3, ws.max_row + 1):
+                    ws.cell(r, c, 20 + (r * 7) % 31)
+                scores = str(tmp / "加了新科目.xlsx")
+                wb.save(scores)
             name = f"核对{i}"
             cmd = [sys.executable, "-m", "chengji", scores, "--任课", T, "--考试", name, "--方案", scheme,
                    "--输出", str(tmp / "out"), "--不生成PDF", "--不确认"]
             cmd += ["--升学比例", str(ratio)] if ratio else []
             cmd += ["--上次名次", prev] if prev else []
             cmd += ["--满分", full] if full else []
+            local = None
+            if grade.endswith("+改比例"):                       # 界面里改过比例：单科得分 30/20/50，结构分各项都用上
+                import yaml
+                local = tmp / "本校设置.yaml"
+                local.write_text(yaml.safe_dump({
+                    "算法方案": {"平时": {"优秀率": 0.3, "及格率": 0.2, "平均分": 0.5, "平均分折算百分制": "是"},
+                                 "中考": {"优秀率": 0.1, "及格率": 0.3, "平均分": 0.6, "平均分折算百分制": "否"}},
+                    "结构分方案": {"平时": {"平均成绩": 40, "全科合格率": 22.5, "全科优秀率": 17.5, "参考率": 5, "进线率": 10, "增值评价": 5,
+                                            "增值名次差": 0.2, "增值进退步": 0.1, "前10名每人加分": 0.3},
+                                   "中考": {"平均成绩": 60, "全科合格率": 20, "全科优秀率": 10, "增值评价": 10, "增值名次差": 0.5, "增值进退步": 0.25}}},
+                    allow_unicode=True), encoding="utf-8")
+                scores = str(ROOT / "samples" / "示例登分表_九年级.xlsx")
+                cmd[3] = scores
+                cmd += ["--本校设置", str(local)]
             subprocess.run(cmd, check=True, cwd=ROOT, capture_output=True)
             xlsx = tmp / "out" / name / f"{name}_各班综合统计.xlsx"
             subprocess.run([soffice, "--headless", "--calc", "--convert-to", "xlsx", "--outdir", str(tmp / "re" / name), str(xlsx)],
                            check=True, capture_output=True, timeout=300)
-            n, errs = verify(scores, tmp / "re" / name / xlsx.name, T, scheme, ratio, "", prev, full)
+            n, errs = verify(scores, tmp / "re" / name / xlsx.name, T, scheme, ratio, "", prev, full, local=local)
             total += n
             bad += len(errs)
             print(f"{grade} {scheme}方案：核对 {n} 项，不一致 {len(errs)} 项")

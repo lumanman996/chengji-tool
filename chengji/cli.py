@@ -18,12 +18,21 @@ import sys
 import traceback
 from pathlib import Path
 
-from . import __version__
+from . import APP_TITLE, __version__, license as lic
 from .analysis import analyze, draft_conclusions
 from .config import load_enrolled, load_school, load_teachers, make_config, normalize_class
 from .excel_report import build_excel
 from .loader import check_data, load_scores
 from .paths import FROZEN, ROOT, ensure_layout
+from .service import clean_name, enrolment_notes, subject_note as _subject_note
+
+
+def has_tty() -> bool:
+    """有没有可以问答的终端。带窗口的打包程序（尤其 Windows）没有标准输入，sys.stdin 是 None。"""
+    try:
+        return bool(sys.stdin) and sys.stdin.isatty()
+    except Exception:
+        return False
 
 
 def clean_path(text: str) -> str:
@@ -116,11 +125,6 @@ def parse_sections(text: str, avail: list[str], all_names: list[str]) -> list[st
     return [n for n in avail if n in want]
 
 
-def clean_name(text: str) -> str:
-    """考试名称要当文件夹名用：去掉首尾空格和不能做文件名的符号。"""
-    return re.sub(r'[\\/:*?"<>|\r\n\t]+', "", text).strip().strip(".")
-
-
 def parse_ratio(text) -> float:
     t = str(text).strip().replace("％", "%")
     v = float(t.rstrip("%"))
@@ -132,13 +136,14 @@ def parse_ratio(text) -> float:
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="成绩核算工具", description=f"成绩核算工具 {__version__}")
+    ap = argparse.ArgumentParser(prog="分寸", description=f"{APP_TITLE} {__version__}")
     ap.add_argument("登分表", nargs="?", help="登分表 Excel 文件（不写则运行时询问，可以把文件拖进窗口）")
     ap.add_argument("--版本", action="version", version=__version__)
     ap.add_argument("--考试", help="考试名称，如：2026年秋季学期九年级第一次月考（不写则运行时询问）")
     ap.add_argument("--年级", help="七年级/八年级/九年级（不写则根据班级名称自动判断）")
     ap.add_argument("--日期", default=None, help="考试日期，如 2026年10月20日（不写则运行时询问，可以不填）")
     ap.add_argument("--满分", default="", help="本次满分与默认不同时填写，如：数学=120 英语=120")
+    ap.add_argument("--不计", default="", help="本次不计入的科目（登分表里有这一列，但这次不算），如：--不计 体育")
     ap.add_argument("--方案", default=None, help="算法方案：平时 或 中考（不写则运行时询问，默认平时），方案内容见 学校设置.yaml")
     ap.add_argument("--升学比例", default="", help="升学线取全级前百分之几，如 80%%（不写则询问，默认见 学校设置.yaml）")
     ap.add_argument("--应考", "--学籍", dest="应考", default="", help="各班应考人数（不写则读任课总表的「班级信息」），如：九1=46 九2=45")
@@ -154,7 +159,7 @@ def main(argv=None):
                                                 "“全部”= 都要；不写则按 学校设置.yaml 的“发布版内容”")
     a = ap.parse_args(argv)
 
-    interactive = not a.不确认 and sys.stdin.isatty()
+    interactive = not a.不确认 and has_tty()
     school = load_school(a.学校设置, a.本校设置)
 
     # ---- 登分表：命令里没写就当场问（可以把文件拖进窗口）
@@ -166,7 +171,7 @@ def main(argv=None):
             if not interactive:
                 sys.exit(1)
         a.登分表 = clean_path(input("请把登分表（Excel 文件）拖进这个窗口，然后按回车："))
-    data = load_scores(a.登分表, school, a.年级)
+    data = load_scores(a.登分表, school, a.年级, exclude=[x for x in re.split(r"[\s,，、]+", a.不计) if x])
     grade = data.grade
 
     # ---- 算法方案：命令里没写就当场问
@@ -185,17 +190,7 @@ def main(argv=None):
     a.方案 = a.方案 or names[0]
 
     # ---- 对照这个年级的固定科目，少了、多了提醒一句（不影响计算）
-    expect = school.expected_subjects(grade, a.方案)
-    subject_note = ""
-    if expect:
-        lack = [s for s in expect if s not in data.subjects]
-        more = [s for s in data.subjects if s not in expect]
-        if lack or more:
-            which = f"{a.方案}核算" if a.方案 in school.grade_subjects else f"{grade}平时考试"
-            subject_note = (f"【提示】{which}固定是 {len(expect)} 科（{'、'.join(expect)}），本次"
-                            + "，".join(x for x in (f"少了 {'、'.join(lack)}" if lack else "",
-                                                    f"多了 {'、'.join(more)}" if more else "") if x)
-                            + "。如果就是这样考的，不用管；否则请检查登分表。")
+    subject_note = _subject_note(school, grade, a.方案, data.subjects)
 
     # ---- 考试名称、日期：命令里没写就当场问。名称同时是结果文件夹和文件的名字
     default_name = clean_name(Path(a.登分表).stem)
@@ -214,13 +209,15 @@ def main(argv=None):
         a.日期 = input("考试日期（如 2026年10月20日，会印在发布版上；不填直接回车）：").strip() if interactive else ""
 
     # ---- 本次满分：默认值 → 命令行 --满分 → 交互确认
-    full = {s: school.grade_full.get(grade, {}).get(s, school.full[s]) for s in data.subjects}
+    full = {s: school.grade_full.get(grade, {}).get(s, school.full.get(s, 0)) for s in data.subjects}
     full.update({k: v for k, v in parse_full_overrides(a.满分).items() if k in full})
     print(f"\n年级：{grade}　考试：{exam}　实考人数：{len(data.df)}　未计入：{len(data.excluded)} 人")
     print(f"从登分表抓到 {len(data.subjects)} 门科目及满分："
           + "　".join(f"{s} {v:g}" if v else f"{s} 【待设置】" for s, v in full.items()))
     if data.empty_subjects:
         print(f"整列没有成绩、本次不计算的科目：{'、'.join(data.empty_subjects)}")
+    if data.new_subjects:
+        print(f"其中新加的科目：{'、'.join(data.new_subjects)}（科目总表里没有，按这一列是分数认出来的；不想算就加 --不计）")
     if data.ignored_cols:
         print("登分表里没当成科目、已忽略的列：" + "、".join(data.ignored_cols))
 
@@ -289,14 +286,18 @@ def main(argv=None):
     if "参考率" in W:
         enrolled.update(parse_class_values(a.应考, gc))
         miss = [c for c in CL if not enrolled.get(c)]
-        if miss and not interactive:
-            sys.exit(f"{'、'.join(miss)} 没有应考人数（算参考率要用）。请填在任课总表的「班级信息」工作表，"
-                     f"或用 --应考 填写，例如：--应考 {miss[0]}=46")
-        if miss:
-            print(f"任课总表「班级信息」里没有这些班的应考人数：{'、'.join(miss)}")
-            enrolled.update(ask_class_values("请输入应考人数，还缺 {left}（写法：" + f"{miss[0]}=46" + "）：",
-                                             miss, gc, 1, None, allow_empty=False))
-        print("应考人数：" + "　".join(f"{c} {enrolled[c]}" for c in CL))
+        while miss and interactive:                          # 不填也行：没填的班按实考人数算
+            ans = input(f"还没有应考人数的班：{'、'.join(miss)}。请输入（如 {miss[0]}=46）；"
+                        f"直接回车 = 按实考人数算（参考率 100%）：").strip()
+            if not ans:
+                break
+            try:
+                enrolled.update({c: v for c, v in parse_class_values(ans, gc).items() if c in CL and v > 0})
+            except ValueError as e:
+                print(e)
+            miss = [c for c in CL if not enrolled.get(c)]
+        enrolled = {c: v for c, v in enrolled.items() if v}
+        print("应考人数：" + "　".join(f"{c} {enrolled.get(c) or '按实考'}" for c in CL))
     if "增值评价" in W:
         prev = parse_class_values(a.上次名次, gc)
         if interactive and not prev:
@@ -313,11 +314,7 @@ def main(argv=None):
     msgs = check_data(data, cfg)
     if subject_note:
         msgs.insert(0, subject_note)
-    if "参考率" in cfg.structure:
-        real = data.df["班级"].value_counts()
-        for c in CL:
-            if real[c] > cfg.enrolled[c]:
-                msgs.append(f"【错误】{c} 实考人数 {real[c]} 比应考人数 {cfg.enrolled[c]} 还多，请检查应考人数")
+    msgs += enrolment_notes(cfg, data)
     for m in msgs:
         print(m)
     if any(m.startswith("【错误】") for m in msgs):
@@ -346,6 +343,10 @@ def main(argv=None):
     concl = draft_conclusions(R)
     out = Path(a.输出) / exam
     out.mkdir(parents=True, exist_ok=True)
+    try:
+        lic.require_export()                                 # 试用到期且未激活时，不能导出
+    except lic.LicenseError as e:
+        sys.exit(f"{e}（核算结果可以在图形界面里查看；激活后才能导出 Excel 和 PDF）")
     xlsx = build_excel(R, out / f"{exam}_各班综合统计.xlsx", concl)
     print(f"已生成：{xlsx}")
     pdf_note = "发布版 PDF：未生成"
@@ -411,13 +412,13 @@ def run(argv=None):
             stream.reconfigure(errors="replace")
         except Exception:
             pass
-    tty = sys.stdin.isatty()
+    tty = has_tty()
     guided = tty and (FROZEN or not any(x.startswith("--") for x in argv))     # 双击或只给了文件 = 引导模式
     code = 0
     try:
         new = ensure_layout()
         if guided:
-            print(f"===== 成绩核算工具 {__version__} =====")
+            print(f"===== {APP_TITLE} {__version__} =====")
             if FROZEN and any(n.startswith("config/") for n in new):
                 print("第一次使用：已在程序旁边放好 config（学校设置）、templates（空白模板）、samples（示例数据）文件夹。\n"
                       "　先打开 config 里的“学校设置.yaml”，把学校名称改成自己学校的；空白模板在 templates 里。")

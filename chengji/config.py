@@ -155,7 +155,7 @@ def make_config(school: School, grade: str, subjects: list[str], exam: str, date
     pr = school.promote_ratio if promote_ratio is None else promote_ratio
     if not 0 < pr <= 1:
         raise ValueError(f"升学线比例应在 0～100% 之间，现在是 {pr}")
-    full = {s: school.grade_full.get(grade, {}).get(s, school.full[s]) for s in subjects}
+    full = {s: school.grade_full.get(grade, {}).get(s, school.full.get(s, 0)) for s in subjects}
     missing = [s for s, v in full.items() if not v]
     if missing:
         raise ValueError(f"以下科目的满分还没有设置：{'、'.join(missing)}。请在 config/学校设置.yaml 的“科目满分”中填写。")

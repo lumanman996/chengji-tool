@@ -2,3 +2,5 @@
 openpyxl>=3.1
 pandas>=2.0
 PyYAML>=6.0
+pywebview>=5.0        # 程序窗口
+cryptography>=42      # 验证激活码（公开源码版用不到，装着无妨）

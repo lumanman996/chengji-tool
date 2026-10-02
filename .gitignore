@@ -7,6 +7,10 @@ output/
 *.pdf
 *.docx
 
+# 激活相关：验证模块、生成器、密钥、发放记录，一律不上传
+chengji/_license_impl.py
+admin/
+
 # 只在本机用的说明和记录
 CLAUDE.local.md
 出错记录.txt
@@ -22,3 +26,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+自检结果.json
+.DS_Store

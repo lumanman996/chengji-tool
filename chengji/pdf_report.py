@@ -247,7 +247,8 @@ def _structure_body(R: Result) -> str:
     rule = [f"各项直接按比例折分（比率 × 分值）；表中小字为比率。平均成绩 = 本班总分平均分 ÷ 总分满分（{cfg.total_full:g}）。",
             "全科合格 / 全科优秀：每一科都达到合格线 / 优秀线的学生 ÷ 本班实考人数。"]
     if "参考率" in W:
-        rule.append("参考率 = 实考人数 ÷ 应考人数（实考人数 = 各科成绩齐全、计入统计的学生）。")
+        rule.append("参考率 = 实考人数 ÷ 应考人数（实考人数 = 各科成绩齐全、计入统计的学生）。"
+                    + ("本次没有填应考人数的班，按实考人数计算（参考率 100%）。" if any(X[c].get("应考按实考") for c in CL) else ""))
     if "进线率" in W:
         rule.append(f"进线率 = 本班升学线（全级前{pct(cfg.promote_ratio, 0)}，{R.cut:g}分）以上人数 ÷ 实考人数。")
     if "增值评价" in W:
