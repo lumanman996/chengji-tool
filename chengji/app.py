@@ -14,8 +14,25 @@ def _log_error():
         pass
 
 
+def _safe_output():
+    """让输出永远不会因为编码报错：
+    输出被别的程序接走时（管道、重定向）一律用 UTF-8；显示在终端里时沿用终端的编码，遇到显示不了的字用 ? 代替。
+    带窗口的打包程序没有输出通道（None），跳过。"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream is None:
+                continue
+            if stream.isatty():
+                stream.reconfigure(errors="replace")
+            else:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def launch(argv=None):
     argv = sys.argv[1:] if argv is None else argv
+    _safe_output()
     headless = bool(argv) and argv[0] != "--browser"          # 命令行 / 自检：没有人在看
     try:
         if argv and argv[0] == "--自检":
