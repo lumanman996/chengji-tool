@@ -267,14 +267,6 @@ textarea.inp{height:86px;padding:10px 12px;resize:none;font-family:ui-monospace,
 .tt input{height:36px;width:100%;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:0 10px;outline:none} .tt input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .tt .rm,.cinfo .rm{width:30px;height:30px;border-radius:8px;color:var(--faint);font-size:17px} .tt .rm:hover,.cinfo .rm:hover{background:var(--down-soft);color:var(--down)}
 .cinfo{display:flex;flex-wrap:wrap;gap:8px} .cinfo .chip input.c{width:56px;background:none;border:0;text-align:left;padding-left:12px;font-weight:600}
-/* 联系方式 */
-.cwrap{display:flex;gap:26px;align-items:center;margin-top:10px}
-.cwrap img{width:168px;height:auto;border-radius:12px;border:1px solid var(--line);background:#fff;flex:none}
-.clist{display:grid;gap:10px} .clist .crow{display:flex;align-items:center;gap:10px;font-size:14.5px}
-.clist .crow span{color:var(--muted);width:44px;flex:none} .clist .crow b{font-weight:600} .clist .btn{height:28px;padding:0 11px;font-size:12.5px}
-.actqr{display:flex;gap:14px;align-items:center;margin-top:8px;padding:10px 12px;border-radius:11px;background:var(--gold-soft)}
-.actqr img{width:92px;height:auto;border-radius:8px;background:#fff;flex:none} .actqr .btn{height:26px;padding:0 10px;font-size:12.5px;margin-left:6px}
-.actqr p{font-size:13.5px;color:var(--ink);line-height:1.7}
 /* 帮助页 */
 .help{max-width:820px} .help h2{font-size:19px;margin:34px 0 10px;padding-top:6px} .help h2:first-of-type{margin-top:22px}
 .help p,.help li{color:var(--ink-2);line-height:1.85;font-size:14.5px} .help ol,.help ul{padding-left:22px;margin:4px 0}
@@ -531,7 +523,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
      <div class="help">
       <div class="eyebrow">帮助</div>
       <h1>怎么用、怎么算</h1>
-      <div class="toc"><a data-h="h1">三步上手</a><a data-h="h2">登分表怎么填</a><a data-h="h3">名词解释</a><a data-h="h4">怎么算的</a><a data-h="h5">试用与激活</a><a data-h="h6">常见问题</a><a data-h="h8">联系方式</a><a data-h="h7">关于</a></div>
+      <div class="toc"><a data-h="h1">三步上手</a><a data-h="h2">登分表怎么填</a><a data-h="h3">名词解释</a><a data-h="h4">怎么算的</a><a data-h="h5">试用与激活</a><a data-h="h6">常见问题</a><a data-h="h7">关于</a></div>
 
       <h2 id="h1">三步上手</h2>
       <ol><li><b>导入</b>：在“开始”页把登分表拖进来（没有登分表，可以在那里下载各年级的空白模板）。</li>
@@ -569,6 +561,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
 
       <h2 id="h5">试用与激活</h2>
       <p id="helpLic">第一次打开起可以免费试用 3 天。试用结束后仍然可以核算、查看结果，导出 Excel 和 PDF 需要激活。激活码按电脑发放：点左下角“输入激活码”，把显示的机器码发给管理员，收到激活码后粘贴进去即可，全程不需要联网。换电脑或重装系统后需要重新申请。</p>
+      <div class="contactBox"></div>
 
       <h2 id="h6">常见问题</h2>
       <div class="qa"><b>有一科没被统计？</b><p>看“确认设置”左边的提示。多半是那一列下面不是数字，或者表头写成了“总分”“名次”这类。</p>
@@ -578,15 +571,6 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
         <b>改了一个分数想重算？</b><p>重新导入再算一遍。用同一个考试名称会覆盖原来的结果（会提醒）；想两份都留，换个名称。</p>
         <b>删错了考试？</b><p>删除的考试在结果文件夹的“已删除”里，把那个文件夹拖回上一层就恢复了。</p>
         <b>换电脑？</b><p>把数据文件夹整个拷过去就行；激活码要按新电脑的机器码重新申请。</p></div>
-
-      <h2 id="h8">联系方式</h2>
-      <p>有问题、建议，或者需要激活码，欢迎通过下面的方式联系：</p>
-      <div class="cwrap"><img src="/wechat-qr.png" alt="微信二维码" id="qrHelp">
-        <div class="clist">
-          <div class="crow"><span>微信</span><b class="cWechat"></b><button class="btn sec" data-copy="wechat">复制</button><span style="width:auto">或用微信扫左边的码</span></div>
-          <div class="crow"><span>邮箱</span><b class="cEmail"></b><button class="btn sec" data-copy="email">复制</button></div>
-          <div class="crow"><span>网上</span><b style="font-weight:500">在 GitHub 上提交问题</b><button class="btn sec" id="issueBtn">打开</button></div>
-        </div></div>
 
       <h2 id="h7">关于</h2>
       <p><b>分寸 · 成绩核算</b>　版本 <span id="aboutVer"></span></p>
@@ -608,8 +592,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
     <div class="eyebrow">使用许可</div>
     <h2>激活这台电脑</h2>
     <p class="sub">激活后可以导出 Excel 和 PDF。一个激活码只对这一台电脑有效。</p>
-    <div class="stepn"><i>1</i><div><b>把机器码发给管理员</b><p>管理员会根据它生成激活码。</p>
-      <div class="actqr"><img src="/wechat-qr.png" alt="微信二维码"><div><p>用微信扫码添加，或者：</p><p style="white-space:nowrap">微信 <b class="cWechat"></b><button class="btn sec" data-copy="wechat">复制</button></p><p style="white-space:nowrap">邮箱 <b class="cEmail"></b><button class="btn sec" data-copy="email">复制</button></p></div></div>
+    <div class="stepn"><i>1</i><div><b>把机器码发给管理员</b><p>管理员会根据它生成激活码。</p><div class="contactBox"></div>
       <div class="code"><span id="machine"></span><span class="sp"></span><button class="btn sec" style="height:32px;letter-spacing:0;font-family:var(--sans)" id="copyBtn">复制</button></div></div></div>
     <div class="stepn"><i>2</i><div><b>把收到的激活码粘贴到这里</b>
       <textarea class="inp" style="margin-top:8px" id="code" placeholder="粘贴激活码…"></textarea><div class="msgerr" id="actErr"></div></div></div>
@@ -709,8 +692,8 @@ function paintLicense(L){
   const t = $("#setLic"); t.textContent = L.state === "active" ? "已激活 · 有效期至 " + L.expiry : txt; t.className = "tag " + (L.state === "active" ? "a" : L.state === "expired" ? "d" : "g");
   $("#setMachine").textContent = "机器码　" + (L.machine || ""); $("#machine").textContent = L.machine || "";
   $("#lockTitle").textContent = L.message && L.state !== "expired" ? L.message : "试用已结束";
-  $$(".contactBox").forEach(b => { b.innerHTML = `<span class="contact">申请激活码请联系：微信 ${esc(ST.contact.wechat)}<button class="btn sec">复制</button></span>`;
-    b.querySelector("button").onclick = () => copyText(ST.contact.wechat, "已复制微信号：" + ST.contact.wechat); });
+  $$(".contactBox").forEach(b => { b.innerHTML = L.contact ? `<span class="contact">申请激活码请联系：${esc(L.contact)}<button class="btn sec">复制</button></span>` : "";
+    const btn = b.querySelector("button"); if (btn) btn.onclick = () => copyText(L.contact.replace(/^\D+/, ""), "已复制：" + L.contact); });
 }
 function openAct(){ $("#actErr").textContent = ""; $("#mask").classList.add("on"); setTimeout(() => $("#code").focus(), 50); }
 function closeAct(){ $("#mask").classList.remove("on"); }
@@ -746,9 +729,6 @@ async function refresh(){
   });
   $("#tryRow").classList.toggle("hide", !ST.hasSample);
   applyFont(ST.fontSize);
-  $$(".cWechat").forEach(e => e.textContent = ST.contact.wechat); $$(".cEmail").forEach(e => e.textContent = ST.contact.email);
-  $$("[data-copy]").forEach(b => b.onclick = () => copyText(ST.contact[b.dataset.copy], (b.dataset.copy === "wechat" ? "已复制微信号：" : "已复制邮箱：") + ST.contact[b.dataset.copy]));
-  $("#issueBtn").onclick = () => call("open_issues");
   paintLicense(ST.license);
   if (ST.firstRun && !$("#welcome").dataset.shown) { $("#welcome").dataset.shown = "1"; $("#welcome").classList.add("on"); setTimeout(() => $("#wSchool").focus(), 80); }
 }
