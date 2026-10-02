@@ -70,5 +70,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "成绩核算 $GITHUB_REF_NAME" --notes-file packaging/发布说明.md \
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "分寸 · 成绩核算 $GITHUB_REF_NAME" --notes-file packaging/发布说明.md \
             || gh release upload "$GITHUB_REF_NAME" dist/*.zip --clobber

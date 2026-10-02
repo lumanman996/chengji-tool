@@ -15,9 +15,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 if sys.platform == "darwin":
-    exe = DIST / "成绩核算.app" / "Contents" / "MacOS" / "成绩核算"
+    exe = DIST / "分寸.app" / "Contents" / "MacOS" / "分寸"
 else:
-    exe = DIST / "成绩核算" / ("成绩核算.exe" if os.name == "nt" else "成绩核算")
+    exe = DIST / "分寸" / ("分寸.exe" if os.name == "nt" else "分寸")
 HOME = DIST / "_试跑"
 
 

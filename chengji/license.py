@@ -14,7 +14,7 @@ except ImportError:          # 公开源码版：没有许可模块，不限制
 def status() -> dict:
     """当前许可状态。state：open（不限制）/ trial（试用中）/ expired（试用结束）/ active（已激活）。"""
     if _impl is None:
-        return {"state": "open", "canExport": True, "daysLeft": None, "expiry": None, "machine": None, "message": ""}
+        return {"state": "open", "canExport": True, "daysLeft": None, "expiry": None, "machine": None, "message": "", "contact": ""}
     return _impl.status()
 
 

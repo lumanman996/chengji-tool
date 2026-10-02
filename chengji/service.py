@@ -43,6 +43,112 @@ def subject_note(school: School, grade: str, scheme: str, subjects: list[str]) -
             + "。如果就是这样考的，不用管；否则请检查登分表。")
 
 
+def enrolment_notes(cfg, data: ScoreData) -> list[str]:
+    """应考人数的检查和说明：填了的班，实考不能比应考多；没填的班，说明按实考人数算。"""
+    if "参考率" not in cfg.structure:
+        return []
+    real, out = data.df["班级"].value_counts(), []
+    for c in data.classes:
+        e = cfg.enrolled.get(c)
+        if e and real[c] > e:
+            out.append(f"【错误】{c} 实考人数 {real[c]} 比应考人数 {e} 还多，请检查应考人数")
+    miss = [c for c in data.classes if not cfg.enrolled.get(c)]
+    if miss:
+        who = "各班" if len(miss) == len(data.classes) else "、".join(miss)
+        out.append(f"【提示】{who}没有填应考人数，按实考人数计算（参考率按 100% 算）。")
+    return out
+
+
+# ---------------------------------------------------------------- 算法（界面里可以改的比例）
+STRUCT_PCT = ["平均成绩", "全科合格率", "全科优秀率", "参考率", "进线率", "增值评价"]     # 占结构分的百分比（满分 100）
+STRUCT_PTS = {"增值名次差": 0.1, "增值进退步": 0.05, "前10名每人加分": 0}                 # 按“分”填的，右边是没写时的默认值
+
+
+def _clean(v, nd=6):
+    v = round(float(v), nd)
+    return int(v) if v == int(v) else v
+
+
+def algo_view(school: School) -> dict:
+    """给界面的算法设置：单科得分的三个比例（百分数）、是否折算百分制；结构分各项占比（百分数）和几个按分计的数。"""
+    out = {}
+    for name, w in school.schemes.items():
+        st = school.structures.get(name, {})
+        out[name] = {
+            "score": {"优秀率": _clean(w["优秀率"] * 100), "及格率": _clean(w["及格率"] * 100), "平均分": _clean(w["平均分"] * 100)},
+            "normalize": bool(w["折算"]),
+            "structure": {k: _clean(st.get(k, 0)) for k in STRUCT_PCT},
+            "points": {k: _clean(st.get(k, d)) for k, d in STRUCT_PTS.items()},
+        }
+    return out
+
+
+def algo_to_yaml(algo: dict, school: School) -> tuple[dict, dict]:
+    """把界面交来的算法设置检查一遍，换成 学校设置.yaml 里“算法方案”“结构分方案”的写法。有问题抛 ValueError。"""
+    schemes, structs = {}, {}
+    for name in school.schemes:
+        a = algo.get(name)
+        if not a:
+            raise ValueError(f"缺少“{name}”方案的设置。")
+        label = {"平时": "平时考试", "中考": "中考核算"}.get(name, name)
+
+        def num(group, key, lo=0.0, hi=100.0):
+            try:
+                v = float((a.get(group) or {}).get(key) or 0)
+            except (TypeError, ValueError):
+                raise ValueError(f"{label}的“{key}”要填数字。") from None
+            if not lo <= v <= hi:
+                raise ValueError(f"{label}的“{key}”应在 {lo:g}～{hi:g} 之间。")
+            return v
+        sc = {k: num("score", k) for k in ("优秀率", "及格率", "平均分")}
+        if abs(sum(sc.values()) - 100) > 1e-6:
+            raise ValueError(f"{label}的单科得分：三项加起来要等于 100%，现在是 {_clean(sum(sc.values()), 2)}%。")
+        stc = {k: num("structure", k) for k in STRUCT_PCT}
+        if abs(sum(stc.values()) - 100) > 1e-6:
+            raise ValueError(f"{label}的班级结构分：各项加起来要等于 100%，现在是 {_clean(sum(stc.values()), 2)}%。")
+        pts = {k: num("points", k, 0, 10) for k in STRUCT_PTS}
+        schemes[name] = {"优秀率": _clean(sc["优秀率"] / 100), "及格率": _clean(sc["及格率"] / 100), "平均分": _clean(sc["平均分"] / 100),
+                         "平均分折算百分制": "是" if a.get("normalize") else "否"}
+        st = {k: _clean(v) for k, v in stc.items() if v}
+        if st.get("增值评价"):
+            st["增值名次差"], st["增值进退步"] = _clean(pts["增值名次差"]), _clean(pts["增值进退步"])
+        if pts["前10名每人加分"]:
+            st["前10名每人加分"] = _clean(pts["前10名每人加分"])
+        structs[name] = st
+    return schemes, structs
+
+
+# 分数线：界面上的名字 → (School 的属性, 学校设置.yaml 里的写法, 是不是百分比)
+LINES = {"及格线": ("pass_ratio", "及格线比例", True), "优秀线": ("excellent_ratio", "优秀线比例", True),
+         "升学线": ("promote_ratio", "升学线比例", True), "高分线": ("high_ratio", "高分线比例", True),
+         "临界范围": ("near_range", "临界范围", False)}
+
+
+def lines_view(school: School) -> dict:
+    """及格线、优秀线占满分的百分之几；升学线默认取前百分之几；高分线占总分的百分之几；临界生上下几分。"""
+    return {k: _clean(getattr(school, attr) * (100 if pct else 1)) for k, (attr, _y, pct) in LINES.items()}
+
+
+def lines_to_yaml(lines: dict) -> dict:
+    v = {}
+    for k, (_a, _y, pct) in LINES.items():
+        try:
+            v[k] = float(lines.get(k))
+        except (TypeError, ValueError):
+            raise ValueError(f"“{k}”要填数字。") from None
+        if not 0 < v[k] <= 100:
+            raise ValueError(f"“{k}”应在 1～100 之间。")
+    if v["及格线"] >= v["优秀线"]:
+        raise ValueError("优秀线要比及格线高。")
+    return {y: _clean(v[k] / 100 if pct else v[k]) for k, (_a, y, pct) in LINES.items()}
+
+
+def scheme_snapshot(school: School, scheme: str) -> dict:
+    """这次核算用的比例和分数线，随结果一起存下来：以后改了设置，回看、导出旧考试仍按当时的算。"""
+    return {"score": dict(school.schemes[scheme]), "structure": dict(school.structures.get(scheme, {})),
+            "lines": {attr: getattr(school, attr) for attr, _y, _p in LINES.values() if attr != "promote_ratio"}}
+
+
 def _teacher_table(teacher_path, school: School, grade: str):
     if teacher_path and Path(teacher_path).is_file():
         return load_teachers(teacher_path, school, grade), load_enrolled(teacher_path, school, grade), True
@@ -55,6 +161,10 @@ def inspect(path, school: School, teacher_path=None, grade: str | None = None) -
     g = data.grade
     teachers, enrolled, has_table = _teacher_table(teacher_path, school, g)
     counts = data.df["班级"].value_counts()
+    listed = {c: int(counts[c]) for c in data.classes}            # 登分表里这个班一共多少人（含缺考未计入的）
+    for e in data.excluded:
+        if e["班级"] in listed:
+            listed[e["班级"]] += 1
     schemes = []
     for name in school.schemes:
         w = {k: v for k, v in school.structures.get(name, {}).items() if v}
@@ -63,9 +173,9 @@ def inspect(path, school: School, teacher_path=None, grade: str | None = None) -
                         "formula": make_config(_with_full(school, g, data.subjects), g, data.subjects, "x", scheme=name).formula_text()})
     return {
         "file": Path(path).name, "grade": g, "classes": data.classes,
-        "counts": {c: int(counts[c]) for c in data.classes}, "n": len(data.df),
-        "subjects": data.subjects,
-        "full": {s: school.grade_full.get(g, {}).get(s, school.full[s]) for s in data.subjects},
+        "counts": {c: int(counts[c]) for c in data.classes}, "listed": listed, "n": len(data.df),
+        "subjects": data.subjects, "newSubjects": data.new_subjects,
+        "full": {s: school.grade_full.get(g, {}).get(s, school.full.get(s, 0)) for s in data.subjects},
         "excluded": data.excluded, "emptySubjects": data.empty_subjects, "ignoredCols": data.ignored_cols,
         "hasTeacherTable": has_table,
         "teacherCount": len([t for t in teachers if t.subject in data.subjects]),
@@ -87,17 +197,24 @@ def _with_full(school: School, grade: str, subjects: list[str], full: dict | Non
 
 
 def compute(path, school: School, opts: dict, teacher_path=None) -> tuple[Result, list[str], list[str]]:
-    """按确认好的设置计算。opts：scheme、exam、date、full{科目:满分}、ratio、enrolled{班:人数}、prev{班:名次}、grade。
+    """按确认好的设置计算。opts：scheme、exam、date、full{科目:满分}、ratio、enrolled{班:人数}、prev{班:名次}、grade、
+    exclude[本次不计的科目]、schemeDef（当时的比例快照，回看旧考试时用）。
     返回 (Result, 自动起草的结论, 提示信息)。数据有硬伤（超过满分、应考人数不对等）时抛 ValueError。"""
     import copy
     school = copy.deepcopy(school)
-    data = load_scores(path, school, opts.get("grade"))
+    data = load_scores(path, school, opts.get("grade"), exclude=opts.get("exclude") or ())
     g = data.grade
     scheme = opts.get("scheme") or next(iter(school.schemes))
+    snap = opts.get("schemeDef")                               # 回看旧考试：用当时存下来的比例
+    if snap:
+        school.schemes[scheme] = dict(snap["score"])
+        school.structures[scheme] = dict(snap["structure"])
+        for attr, val in (snap.get("lines") or {}).items():
+            setattr(school, attr, val)
     if scheme not in school.schemes:
         raise ValueError(f"没有名为“{scheme}”的算法方案")
 
-    full = {s: school.grade_full.get(g, {}).get(s, school.full[s]) for s in data.subjects}
+    full = {s: school.grade_full.get(g, {}).get(s, school.full.get(s, 0)) for s in data.subjects}
     for s, v in (opts.get("full") or {}).items():
         if s in full and v not in (None, ""):
             full[s] = float(v)
@@ -117,9 +234,7 @@ def compute(path, school: School, opts: dict, teacher_path=None) -> tuple[Result
         for c, v in (opts.get("enrolled") or {}).items():
             if c in CL and v not in (None, ""):
                 enrolled[c] = int(float(v))
-        lack = [c for c in CL if not enrolled.get(c)]
-        if lack:
-            raise ValueError(f"还没有填应考人数：{'、'.join(lack)}。")
+        enrolled = {c: v for c, v in enrolled.items() if v}       # 没填的班不强求：计算时按实考人数代替
     if "增值评价" in W:
         prev = {c: int(float(v)) for c, v in (opts.get("prev") or {}).items() if c in CL and v not in (None, "")}
         if prev:
@@ -137,11 +252,7 @@ def compute(path, school: School, opts: dict, teacher_path=None) -> tuple[Result
     note = subject_note(school, g, scheme, data.subjects)
     if note:
         msgs.insert(0, note)
-    if "参考率" in cfg.structure:
-        real = data.df["班级"].value_counts()
-        for c in CL:
-            if real[c] > cfg.enrolled[c]:
-                msgs.append(f"【错误】{c} 实考人数 {real[c]} 比应考人数 {cfg.enrolled[c]} 还多，请检查应考人数")
+    msgs += enrolment_notes(cfg, data)
     errors = [m.replace("【错误】", "") for m in msgs if m.startswith("【错误】")]
     if errors:
         raise ValueError("；".join(errors) + "。")
@@ -238,6 +349,65 @@ def list_runs(output_root, limit: int = 30) -> list[dict]:
             continue
     runs.sort(key=lambda r: -r["_t"])
     return [{k: v for k, v in r.items() if k != "_t"} for r in runs[:limit]]
+
+
+def last_run_for(output_root, grade: str, not_name: str = "") -> dict | None:
+    """同一个年级最近一次算过的考试：把它的结构分名次、应考人数带出来，供这次预填（使用者可以改）。"""
+    root = Path(output_root)
+    best = None
+    for f in root.glob(f"*/{RUN_FILE}") if root.is_dir() else []:
+        try:
+            m = json.loads(f.read_text(encoding="utf-8"))
+            v = m["view"]
+        except Exception:
+            continue
+        if v.get("grade") != grade or v.get("exam") == not_name or not v.get("structure"):
+            continue
+        if best is None or f.stat().st_mtime > best[0]:
+            best = (f.stat().st_mtime, v)
+    if not best:
+        return None
+    v = best[1]
+    return {"name": v["exam"], "date": v.get("date") or "",
+            "ranks": {x["name"]: x["名次"] for x in v["structure"]},
+            "enrolled": {x["name"]: x["应考人数"] for x in v["structure"] if not x.get("应考按实考")}}
+
+
+DELETED = "已删除"          # 删掉的考试移到 output/已删除/ 里，需要时可以找回
+
+
+def delete_run(output_root, name: str) -> Path:
+    src = Path(output_root) / clean_name(name)
+    if not (src / RUN_FILE).is_file():
+        raise ValueError(f"找不到“{name}”。")
+    bin_ = Path(output_root) / DELETED
+    bin_.mkdir(exist_ok=True)
+    dst = bin_ / f"{src.name}_{time.strftime('%Y%m%d_%H%M%S')}"
+    shutil.move(str(src), str(dst))
+    return dst
+
+
+def rename_run(output_root, name: str, to: str) -> str:
+    """给算过的考试改名：文件夹、里面带考试名的文件、存着的结果一起改。"""
+    old, new = clean_name(name), clean_name(to)
+    src, dst = Path(output_root) / old, Path(output_root) / new
+    if not new:
+        raise ValueError("请填写新的名称。")
+    if new == old:
+        return new
+    if not (src / RUN_FILE).is_file():
+        raise ValueError(f"找不到“{name}”。")
+    if dst.exists():
+        raise ValueError(f"已经有一个叫“{new}”的考试了，请换个名称。")
+    src.rename(dst)
+    for f in list(dst.iterdir()):
+        if f.is_file() and f.name.startswith(old + "_"):
+            f.rename(dst / (new + f.name[len(old):]))
+    m = json.loads((dst / RUN_FILE).read_text(encoding="utf-8"))
+    m["view"]["exam"] = new
+    m.setdefault("opts", {})["exam"] = new
+    (dst / RUN_FILE).write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+    return new
 
 
 def load_run(output_root, name: str) -> dict:

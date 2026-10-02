@@ -512,8 +512,8 @@ def _structure_sheet(wb, R: Result, P, rng, cls, tot, SC, NS, TC, rT):
         for jj, (g, h, tpl, fmt, inp) in enumerate(cols, 1):
             if tpl is None:
                 v = c
-            elif tpl == "enrolled":
-                v = x["应考人数"]
+            elif tpl == "enrolled":                     # 没填应考人数：这一格先等于实考人数，填上实际人数即可重算
+                v = fill("={实考人数}{r}", r) if x.get("应考按实考") else x["应考人数"]
             elif tpl == "prev":
                 v = x["上次名次"]
             else:
@@ -527,7 +527,9 @@ def _structure_sheet(wb, R: Result, P, rng, cls, tot, SC, NS, TC, rT):
              "全科合格 / 全科优秀 = 每一科都达到合格线 / 优秀线的学生。"]
     if "参考率" in W:
         lines.append("应考人数 = 应该参加考试的在籍学生；实考人数 = 各科成绩齐全、计入统计的学生"
-                     "（缺考、请假、成绩不全的不算）。参考率 = 实考人数 ÷ 应考人数。")
+                     "（缺考、请假、成绩不全的不算）。参考率 = 实考人数 ÷ 应考人数。"
+                     + ("没有填应考人数的班，应考人数按实考人数算（参考率 100%）；在黄色格子里填上实际人数就会重算。"
+                        if any(R.structure[c].get("应考按实考") for c in CL) else ""))
     if "进线率" in W:
         lines.append(f"进线率 = 本班升学线（全级前{cfg.promote_ratio:.0%}）以上人数 ÷ 实考人数。")
     if "增值评价" in W:

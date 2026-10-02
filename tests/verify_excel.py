@@ -19,8 +19,8 @@ from chengji.loader import load_scores  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def verify(score_path, xlsx_path, teacher_path=None, scheme="平时", ratio=None, enrolled="", prev="", full=""):
-    school = load_school(ROOT / "config" / "学校设置.yaml")
+def verify(score_path, xlsx_path, teacher_path=None, scheme="平时", ratio=None, enrolled="", prev="", full="", school_path=None, local=None):
+    school = load_school(school_path or ROOT / "config" / "学校设置.yaml", local)
     data = load_scores(score_path, school)
     school.grade_full.setdefault(data.grade, {}).update(parse_full_overrides(full))
     T = load_teachers(teacher_path, school, data.grade) if teacher_path else []

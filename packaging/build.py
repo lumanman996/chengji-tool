@@ -2,9 +2,9 @@
 
 用法：python packaging/build.py
 结果：
-  Windows  dist/成绩核算/                成绩核算.exe + 程序文件 + config + templates + samples + data + 使用说明
+  Windows  dist/分寸/                    分寸.exe + 程序文件 + config + templates + samples + data + 使用说明
            dist/chengji-tool-v版本-windows.zip
-  Mac      dist/成绩核算.app            （设置和结果放在“文稿/成绩核算”文件夹）
+  Mac      dist/分寸.app                （设置和结果放在“文稿/分寸成绩核算”文件夹）
            dist/chengji-tool-v版本-mac.zip
 
 有 chengji/_license_impl.py（试用与激活模块，不在公开仓库里）时会一起打进去；没有就是不限制的版本。
@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from chengji import __version__   # noqa: E402
 
-NAME = "成绩核算"
+NAME = "分寸"
 DIST = ROOT / "dist"
 MAC = sys.platform == "darwin"
 WIN = os.name == "nt"

@@ -3,7 +3,7 @@
 - 用源码运行（python -m chengji）：项目文件夹。
 - 用打包好的程序运行：
     Windows：程序文件所在的文件夹（解压到哪儿，设置和结果就在哪儿）；
-    Mac：“文稿/成绩核算”文件夹（Mac 的程序包里不能写东西）。
+    Mac：“文稿/分寸成绩核算”文件夹（Mac 的程序包里不能写东西）。
   第一次运行时，会把自带的学校设置、模板、示例数据放到这个文件夹里，方便修改和使用。
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ def app_root() -> Path:
     if os.environ.get("CHENGJI_HOME"):                     # 指定数据文件夹（自动测试用）
         return Path(os.environ["CHENGJI_HOME"]).resolve()
     if FROZEN and sys.platform == "darwin":
-        return Path.home() / "Documents" / "成绩核算"
+        return Path.home() / "Documents" / "分寸成绩核算"
     if FROZEN:
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent.parent
@@ -33,6 +33,13 @@ def ensure_layout() -> list[str]:
     """免安装程序第一次运行：把自带的 config / templates / samples 放到程序旁边，并建好 data、output 文件夹。
     已经有的文件不会被覆盖。返回本次新放出来的内容。"""
     made = []
+    old = Path.home() / "Documents" / "成绩核算"            # 改名之前（“成绩核算”）在 Mac 上用的数据文件夹：原样搬过来
+    if FROZEN and sys.platform == "darwin" and not os.environ.get("CHENGJI_HOME") and old.is_dir() and not ROOT.exists():
+        try:
+            old.rename(ROOT)
+            made.append("（已把原来的“成绩核算”文件夹改名为“分寸成绩核算”）")
+        except OSError:
+            pass
     ROOT.mkdir(parents=True, exist_ok=True)
     for name in ("data", "output"):
         if not (ROOT / name).exists():

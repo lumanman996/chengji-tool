@@ -9,9 +9,10 @@ import threading
 import time
 import webbrowser
 
+from . import APP_TITLE
 from .server import start
 
-TITLE = "成绩核算"
+TITLE = APP_TITLE
 
 
 def selftest() -> int:
@@ -25,7 +26,7 @@ def selftest() -> int:
     req = urllib.request.Request(url + "api/state", data=b"{}", headers={"X-Token": token, "Content-Type": "application/json"})
     st = json.loads(urllib.request.urlopen(req, timeout=10).read().decode("utf-8"))
     httpd.shutdown()
-    ok = "成绩核算" in html and st.get("ok")
+    ok = "分寸" in html and st.get("ok")
     info = {"ok": bool(ok), "version": st["data"]["version"], "license": st["data"]["license"]["state"], "root": str(app.root)}
     (app.root / "自检结果.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(info, ensure_ascii=False))
@@ -37,11 +38,12 @@ def main(browser: bool = False):
     if not browser:
         try:
             import webview
-            webview.create_window(TITLE, url, width=1320, height=880, min_size=(1080, 720))
+            app.window = webview.create_window(TITLE, url, width=1320, height=880, min_size=(1080, 720))
             webview.start()
             httpd.shutdown()
             return
         except Exception as e:                               # 没有窗口组件（或启动失败）：改用浏览器
+            app.window = None
             print(f"窗口组件不可用（{type(e).__name__}），改用浏览器打开。")
     webbrowser.open(url)
     print(f"界面已在浏览器里打开：{url}\n关掉浏览器里的那个页面，本程序稍后会自动退出。")

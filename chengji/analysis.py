@@ -157,14 +157,10 @@ def _rank_desc(vals: dict) -> dict:
 
 
 def structure_scores(R: Result) -> dict:
-    """班级结构分。各项直接按比例折分（比率 × 分值），再加增值评价、前10名加分。"""
+    """班级结构分。各项直接按比例折分（比率 × 分值），再加增值评价、前10名加分。
+    没有填应考人数的班，应考人数按实考人数算（参考率 100%，这一项拿满分）。"""
     cfg, df = R.cfg, R.df
     W = cfg.structure
-    if "参考率" in W:
-        miss = [c for c in R.classes if not cfg.enrolled.get(c)]
-        if miss:
-            raise ValueError(f"算参考率需要应考人数，以下班级没有：{'、'.join(miss)}。"
-                             f"请填在任课总表的「班级信息」工作表里。")
     all_pass = pd.Series(True, index=df.index)
     all_exc = pd.Series(True, index=df.index)
     for s in cfg.subjects:
@@ -177,13 +173,14 @@ def structure_scores(R: Result) -> dict:
     for c in R.classes:
         m = df["班级"] == c
         n = int(m.sum())
-        x = {"应考人数": cfg.enrolled.get(c, 0), "实考人数": n,
+        given = cfg.enrolled.get(c)                    # 没填应考人数：用实考人数代替，参考率按 100% 算
+        x = {"应考人数": given or n, "实考人数": n, "应考按实考": not given,
              "总分平均": df.loc[m, "总分"].mean(),
              "全科合格人数": int(all_pass[m].sum()), "全科优秀人数": int(all_exc[m].sum()),
              "进线人数": int((df.loc[m, "总分"] >= R.cut).sum())}
         rate = {"平均成绩": x["总分平均"] / cfg.total_full,
                 "全科合格率": x["全科合格人数"] / n, "全科优秀率": x["全科优秀人数"] / n,
-                "参考率": x["实考人数"] / x["应考人数"] if x["应考人数"] else 0,
+                "参考率": x["实考人数"] / x["应考人数"],
                 "进线率": x["进线人数"] / n}
         for k in RATE_ITEMS:
             if k in W:
