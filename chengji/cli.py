@@ -27,6 +27,14 @@ from .paths import FROZEN, ROOT, ensure_layout
 from .service import clean_name, subject_note as _subject_note
 
 
+def has_tty() -> bool:
+    """有没有可以问答的终端。带窗口的打包程序（尤其 Windows）没有标准输入，sys.stdin 是 None。"""
+    try:
+        return bool(sys.stdin) and sys.stdin.isatty()
+    except Exception:
+        return False
+
+
 def clean_path(text: str) -> str:
     """把拖进窗口的文件路径整理干净：去掉引号、PowerShell 的 & 前缀、Mac 终端加的反斜杠。"""
     t = text.strip()
@@ -150,7 +158,7 @@ def main(argv=None):
                                                 "“全部”= 都要；不写则按 学校设置.yaml 的“发布版内容”")
     a = ap.parse_args(argv)
 
-    interactive = not a.不确认 and sys.stdin.isatty()
+    interactive = not a.不确认 and has_tty()
     school = load_school(a.学校设置, a.本校设置)
 
     # ---- 登分表：命令里没写就当场问（可以把文件拖进窗口）
@@ -401,7 +409,7 @@ def run(argv=None):
             stream.reconfigure(errors="replace")
         except Exception:
             pass
-    tty = sys.stdin.isatty()
+    tty = has_tty()
     guided = tty and (FROZEN or not any(x.startswith("--") for x in argv))     # 双击或只给了文件 = 引导模式
     code = 0
     try:
