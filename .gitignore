@@ -1,0 +1,24 @@
+# ===== 学生真实数据一律不上传 =====
+data/
+output/
+*.xlsx
+!samples/*.xlsx
+!templates/*.xlsx
+*.pdf
+*.docx
+
+# 只在本机用的说明和记录
+CLAUDE.local.md
+出错记录.txt
+
+# 打包生成的东西
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/

@@ -1,0 +1,4 @@
+# 运行需要的（生成 PDF 用电脑上已有的 Edge / Chrome，不用另装）
+openpyxl>=3.1
+pandas>=2.0
+PyYAML>=6.0
