@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>成绩核算</title>
+<style>
+:root{
+  --bg:#F5F4F0; --surface:#FFFFFF; --sunken:#EFEDE8; --ink:#15171C; --ink-2:#3C4048; --muted:#7A7F87; --faint:#A9ADB3;
+  --line:#E6E3DC; --line-2:#EFECE6; --accent:#0E5A4B; --accent-ink:#FFFFFF; --accent-soft:#E6F0EC; --accent-2:#147A66;
+  --gold:#A9823F; --gold-soft:#F6EFE0; --down:#B0452F; --down-soft:#F8E9E4; --up:#0E7A5F;
+  --shadow:0 1px 2px rgba(20,22,28,.04),0 8px 24px -12px rgba(20,22,28,.10);
+  --shadow-lg:0 2px 6px rgba(20,22,28,.06),0 28px 64px -24px rgba(20,22,28,.28);
+  --r:12px; --r-sm:8px;
+  --sans:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#111315; --surface:#1A1D20; --sunken:#15181A; --ink:#ECEDEE; --ink-2:#C9CCD0; --muted:#8C9299; --faint:#5F656C;
+    --line:#2A2E32; --line-2:#22262A; --accent:#5CC2A8; --accent-ink:#0B1F1A; --accent-soft:#17302A; --accent-2:#7AD3BC;
+    --gold:#D2AE6A; --gold-soft:#2C261A; --down:#E58A73; --down-soft:#33201B; --up:#5CC2A8;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.5); --shadow-lg:0 28px 64px -24px rgba(0,0,0,.7); }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1,"cv11" 1;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+.app{display:grid;grid-template-columns:216px 1fr;height:100vh}
+
+/* ---------- 侧栏 ---------- */
+.side{display:flex;flex-direction:column;padding:22px 14px 16px;border-right:1px solid var(--line);background:var(--bg)}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 10px 22px}
+.mark{width:30px;height:30px;border-radius:9px;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:700;font-size:15px;letter-spacing:-.02em}
+.brand b{font-size:15px;font-weight:650;letter-spacing:.01em}
+.brand small{display:block;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:-1px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--r-sm);color:var(--ink-2);font-size:14px;text-align:left;transition:background .15s,color .15s}
+.nav button:hover{background:var(--sunken)}
+.nav button.on{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:var(--shadow)}
+.nav svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+.nav .sep{height:1px;background:var(--line);margin:10px 8px}
+.side .grow{flex:1}
+.lic{margin:0 2px;padding:13px 13px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.lic .k{font-size:11px;color:var(--muted);letter-spacing:.06em}
+.lic .v{font-size:14px;font-weight:600;margin:2px 0 9px;display:flex;align-items:center;gap:7px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--gold)}
+.lic.ok .dot{background:var(--up)} .lic.end .dot{background:var(--down)}
+.lic .bar{height:3px;border-radius:3px;background:var(--line);overflow:hidden;margin-bottom:10px}
+.lic .bar i{display:block;height:100%;background:var(--gold);border-radius:3px}
+.lic a{font-size:12.5px;color:var(--accent);font-weight:600;cursor:pointer}
+.demo{margin:12px 4px 0;font-size:11px;color:var(--faint)}
+.demo select{font-size:11px;border:1px solid var(--line);border-radius:6px;padding:2px 4px;background:var(--surface);margin-left:4px}
+
+/* ---------- 主区 ---------- */
+.main{overflow:auto;position:relative}
+.page{display:none;padding:34px 44px 56px;max-width:1240px;margin:0 auto;animation:fade .25s ease}
+.page.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{font-size:30px;line-height:1.2;font-weight:650;letter-spacing:-.015em;margin:6px 0 6px}
+h2{font-size:16px;font-weight:650;letter-spacing:0}
+.sub{color:var(--muted);font-size:14.5px}
+.row{display:flex;gap:16px;align-items:center}
+.sp{flex:1}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.pad{padding:22px 24px}
+.btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:9px;font-weight:600;font-size:14px;transition:transform .08s,background .15s,box-shadow .15s}
+.btn:active{transform:translateY(1px)}
+.btn.pri{background:var(--accent);color:var(--accent-ink)}
+.btn.pri:hover{background:var(--accent-2)}
+.btn.sec{background:var(--surface);border:1px solid var(--line);color:var(--ink)}
+.btn.sec:hover{border-color:var(--faint)}
+.btn.ghost{color:var(--accent)}
+.btn.lg{height:46px;padding:0 22px;font-size:15px;border-radius:11px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn svg,.ico{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:600;background:var(--sunken);color:var(--ink-2)}
+.tag.a{background:var(--accent-soft);color:var(--accent)} .tag.g{background:var(--gold-soft);color:var(--gold)} .tag.d{background:var(--down-soft);color:var(--down)}
+
+/* 开始页 */
+.drop{margin-top:26px;border:1.5px dashed var(--faint);border-radius:18px;padding:54px 24px;text-align:center;background:linear-gradient(180deg,var(--surface),transparent);transition:border-color .2s,background .2s}
+.drop:hover{border-color:var(--accent);background:var(--accent-soft)}
+.drop .big{width:56px;height:56px;border-radius:16px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;margin:0 auto 16px;box-shadow:var(--shadow)}
+.drop .big svg{width:24px;height:24px;stroke:var(--accent);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.drop h3{font-size:19px;font-weight:650;margin-bottom:4px}
+.drop p{color:var(--muted);margin-bottom:18px}
+.tpl{display:flex;gap:8px;justify-content:center;margin-top:18px;font-size:13px;color:var(--muted);align-items:center}
+.tpl a{color:var(--ink-2);border-bottom:1px solid var(--line);cursor:pointer;padding-bottom:1px}
+.tpl a:hover{color:var(--accent);border-color:var(--accent)}
+.sect{margin-top:38px}
+.sect>.row{margin-bottom:12px}
+.list{overflow:hidden}
+.li{display:grid;grid-template-columns:1fr 110px 90px 150px 28px;gap:16px;align-items:center;padding:15px 22px;border-top:1px solid var(--line-2);cursor:pointer;transition:background .15s}
+.li:first-child{border-top:0}
+.li:hover{background:var(--sunken)}
+.li b{font-weight:600}
+.li span{color:var(--muted);font-size:13px}
+.li .chev{color:var(--faint)}
+
+/* 向导 */
+.steps{display:flex;gap:0;margin:22px 0 22px;align-items:center}
+.step{display:flex;align-items:center;gap:10px;color:var(--muted);font-weight:600;font-size:13.5px}
+.step i{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--faint);display:grid;place-items:center;font-style:normal;font-size:12px}
+.step.done i{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.step.cur{color:var(--ink)} .step.cur i{border-color:var(--ink);color:var(--ink)}
+.steps .ln{width:56px;height:1px;background:var(--line);margin:0 14px}
+.wiz{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start}
+.kv{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line-2);font-size:13.5px}
+.kv:first-of-type{border-top:0}
+.kv span{color:var(--muted)}
+.note{display:flex;gap:10px;padding:11px 12px;border-radius:10px;background:var(--gold-soft);color:var(--ink-2);font-size:13px;margin-top:10px;line-height:1.5}
+.note svg{flex:none;width:16px;height:16px;stroke:var(--gold);fill:none;stroke-width:1.7;margin-top:2px}
+.form{display:grid;gap:22px}
+.field label{display:block;font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.02em;margin-bottom:8px}
+.field .hint{font-size:12.5px;color:var(--faint);margin-top:6px}
+.inp{height:40px;width:100%;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:0 12px;outline:none;transition:border-color .15s,box-shadow .15s}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.seg{display:inline-flex;padding:3px;background:var(--sunken);border-radius:10px;gap:2px}
+.seg button{height:34px;padding:0 18px;border-radius:8px;font-weight:600;color:var(--muted);font-size:13.5px}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;align-items:center;border:1px solid var(--line);border-radius:9px;background:var(--surface);overflow:hidden;height:38px}
+.chip span{padding:0 10px 0 12px;font-size:13.5px}
+.chip input{width:50px;height:100%;border:0;border-left:1px solid var(--line-2);text-align:center;background:var(--sunken);outline:none;font-weight:600}
+.chip.warn{border-color:var(--gold)} .chip.warn input{background:var(--gold-soft)}
+.cls6{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.mini{border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:7px 8px 6px;text-align:center}
+.mini small{display:block;font-size:11.5px;color:var(--muted)}
+.mini input{width:100%;border:0;text-align:center;background:none;outline:none;font-weight:600;font-size:15px}
+.range{display:flex;align-items:center;gap:14px}
+.range input{flex:1;accent-color:var(--accent)}
+.range b{font-size:20px;font-weight:650;width:58px}
+
+/* 结果 */
+.head{display:flex;align-items:flex-end;gap:18px;margin-bottom:22px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.kpi{padding:18px 20px 16px}
+.kpi .k{font-size:12.5px;color:var(--muted);font-weight:600}
+.kpi .v{font-size:34px;font-weight:650;letter-spacing:-.03em;line-height:1.15;margin-top:6px}
+.kpi .v small{font-size:14px;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:4px}
+.kpi .d{font-size:12.5px;color:var(--muted);margin-top:2px}
+.tabs{display:flex;gap:26px;border-bottom:1px solid var(--line);margin-bottom:20px}
+.tabs button{padding:10px 0 11px;color:var(--muted);font-weight:600;font-size:14px;position:relative}
+.tabs button.on{color:var(--ink)}
+.tabs button.on:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--ink);border-radius:2px}
+.pane{display:none} .pane.on{display:block;animation:fade .2s ease}
+.two{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
+.rk{display:grid;grid-template-columns:30px 44px 1fr 62px;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line-2)}
+.rk:first-of-type{border-top:0}
+.rk .no{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:700;background:var(--sunken);color:var(--ink-2)}
+.rk.first .no{background:var(--gold);color:#fff}
+.rk .nm{font-weight:650;font-size:15px}
+.rk .tr{height:8px;border-radius:8px;background:var(--sunken);overflow:hidden}
+.rk .tr i{display:block;height:100%;border-radius:8px;background:var(--accent);opacity:.85}
+.rk.first .tr i{opacity:1}
+.rk .sc{text-align:right;font-weight:650;font-size:15px}
+.rk .mv{grid-column:3/5;font-size:12px;color:var(--muted);margin-top:-6px}
+.find{list-style:none;display:grid;gap:12px}
+.find li{position:relative;padding-left:16px;color:var(--ink-2);font-size:13.5px;line-height:1.65}
+.find li:before{content:"";position:absolute;left:0;top:10px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font-size:12px;font-weight:600;color:var(--muted);text-align:right;padding:11px 12px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:1}
+td{padding:11px 12px;border-bottom:1px solid var(--line-2);text-align:right;white-space:nowrap}
+th:first-child,td:first-child,th.l,td.l{text-align:left}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--sunken)}
+td.b{font-weight:650} td.m{color:var(--muted)}
+td .s{display:block;font-size:11.5px;color:var(--faint);margin-top:-2px}
+.hi{color:var(--accent);font-weight:650} .lo{color:var(--down);font-weight:650}
+.pill{display:inline-grid;place-items:center;min-width:24px;height:24px;border-radius:999px;background:var(--sunken);font-weight:700;font-size:12px;padding:0 7px}
+.pill.g{background:var(--gold);color:#fff}
+.scroll{max-height:462px;overflow:auto;border-radius:var(--r)}
+.tools{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.search{position:relative;width:240px}
+.search svg{position:absolute;left:11px;top:11px;width:16px;height:16px;stroke:var(--faint);fill:none;stroke-width:1.7}
+.search input{padding-left:34px;height:38px}
+.fchips{display:flex;gap:6px}
+.fchips button{height:32px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:600;color:var(--ink-2)}
+.fchips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.count{color:var(--muted);font-size:13px}
+.tgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.tcard h3{font-size:14px;font-weight:650;padding:15px 18px 4px;display:flex;gap:8px;align-items:baseline}
+.tcard h3 small{color:var(--muted);font-weight:500;font-size:12px}
+.band{display:grid;grid-template-columns:150px 1fr 46px;gap:14px;align-items:center;padding:9px 0}
+.band .lab{font-size:13px;color:var(--ink-2)}
+.band .stk{display:flex;height:18px;border-radius:6px;overflow:hidden;background:var(--sunken)}
+.band .stk i{display:block;height:100%}
+.band b{text-align:right}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);margin-bottom:10px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px}
+
+/* 导出 */
+.exp{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;align-items:start;position:relative}
+.xico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:13px;letter-spacing:.02em;margin-bottom:14px}
+.xico.x{background:#E7F3EC;color:#17603A} .xico.p{background:#FBE9E4;color:#A33B25}
+@media (prefers-color-scheme: dark){.xico.x{background:#17302A;color:#7AD3BC}.xico.p{background:#33201B;color:#E58A73}}
+.ul{margin:12px 0 18px;display:grid;gap:6px;color:var(--ink-2);font-size:13.5px}
+.ck{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line-2);cursor:pointer}
+.ck:first-of-type{border-top:0}
+.ck input{display:none}
+.ck .box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--faint);display:grid;place-items:center;transition:.15s;flex:none}
+.ck .box svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:2.4;opacity:0}
+.ck input:checked+.box{background:var(--accent);border-color:var(--accent)} .ck input:checked+.box svg{opacity:1}
+.ck b{font-weight:600} .ck span{color:var(--muted);font-size:12.5px;margin-left:auto}
+.lock{display:none;position:absolute;inset:-8px;border-radius:18px;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:blur(3px);place-items:center;z-index:3}
+.lock .card{max-width:420px;text-align:center;padding:30px 30px 26px;box-shadow:var(--shadow-lg)}
+.lock .big{width:48px;height:48px;border-radius:14px;background:var(--gold-soft);display:grid;place-items:center;margin:0 auto 14px}
+.lock .big svg{width:22px;height:22px;stroke:var(--gold);fill:none;stroke-width:1.7}
+body.end .lock{display:grid}
+
+/* 设置 */
+.set{display:grid;grid-template-columns:200px 1fr;gap:10px 28px;padding:24px 0;border-top:1px solid var(--line)}
+.set:first-of-type{border-top:0;padding-top:6px}
+.set h2{padding-top:2px} .set p.d{color:var(--muted);font-size:13px;margin-top:4px}
+.wt{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.wt .mini b{font-size:20px;font-weight:650;display:block;margin-top:2px}
+
+/* 弹窗 */
+.mask{display:none;position:fixed;inset:0;background:rgba(15,17,20,.42);backdrop-filter:blur(4px);place-items:center;z-index:20}
+.mask.on{display:grid;animation:fade .18s ease}
+.modal{width:520px;background:var(--surface);border-radius:18px;box-shadow:var(--shadow-lg);padding:30px 32px 26px;border:1px solid var(--line)}
+.modal h2{font-size:21px;letter-spacing:-.01em;margin-bottom:6px}
+.code{display:flex;align-items:center;gap:10px;margin:8px 0 4px;padding:12px 14px;border-radius:11px;background:var(--sunken);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:17px;letter-spacing:.12em;font-weight:600}
+.code .sp{flex:1}
+textarea.inp{height:86px;padding:10px 12px;resize:none;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:13px;line-height:1.5}
+.stepn{display:grid;grid-template-columns:22px 1fr;gap:12px;margin-top:20px}
+.stepn i{width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:700;margin-top:1px}
+.stepn b{font-weight:650} .stepn p{color:var(--muted);font-size:13px}
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;opacity:0;transition:.25s;z-index:30;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+/* ---------- 正式界面补充 ---------- */
+.hide{display:none!important}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.empty{padding:70px 20px;text-align:center;color:var(--muted)}
+.empty h2{color:var(--ink);font-size:19px;margin-bottom:6px}
+.empty .btn{margin-top:18px}
+.banner{display:flex;gap:10px;padding:12px 14px;border-radius:10px;background:var(--down-soft);color:var(--down);font-size:13.5px;line-height:1.55;margin-bottom:16px;font-weight:500}
+.banner svg{flex:none;width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;margin-top:2px}
+.notes{display:grid;gap:8px;margin-top:16px}
+.notes .note{margin-top:0}
+.busy{position:fixed;inset:0;display:none;place-items:center;background:color-mix(in srgb,var(--bg) 60%,transparent);z-index:40}
+.busy.on{display:grid}
+.busy div{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);padding:14px 20px;border-radius:12px;box-shadow:var(--shadow-lg);font-weight:600}
+.spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--accent);animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.chip.need{border-color:var(--down)} .chip.need input{background:var(--down-soft)}
+.mini.need{border-color:var(--down)}
+.li.none{cursor:default;color:var(--muted);grid-template-columns:1fr} .li.none:hover{background:none}
+.saved{color:var(--up);font-size:13px;font-weight:600;opacity:0;transition:opacity .3s} .saved.on{opacity:1}
+.msgerr{color:var(--down);font-size:13px;margin-top:8px;min-height:18px}
+.lic.open{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="mark">绩</div><div><b>成绩核算</b><small>Scorebook</small></div></div>
+    <nav class="nav" id="nav">
+      <button data-p="home" class="on"><svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1z"/></svg>开始</button>
+      <button data-p="wizard"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM9 9h6M9 12.5h6M9 16h3"/></svg>核算</button>
+      <button data-p="result"><svg viewBox="0 0 24 24"><path d="M5 19V10M10 19V5M15 19v-7M20 19v-11"/></svg>结果</button>
+      <button data-p="export"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>导出</button>
+      <div class="sep"></div>
+      <button data-p="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>设置</button>
+    </nav>
+    <div class="grow"></div>
+    <div class="lic open" id="lic">
+      <div class="k">使用许可</div>
+      <div class="v"><span class="dot"></span><span id="licText"></span></div>
+      <div class="bar" id="licBar"><i></i></div>
+      <a id="licLink" onclick="openAct()"></a>
+    </div>
+    <div class="demo" id="ver"></div>
+  </aside>
+
+  <main class="main">
+    <!-- ================= 开始 ================= -->
+    <section class="page on" id="home">
+      <div class="eyebrow" id="schoolName">&nbsp;</div>
+      <h1>今天要核算哪次考试？</h1>
+      <p class="sub">把登分表交给它，几秒钟得到各班统计、班级结构分、教师排名。成绩只留在这台电脑上。</p>
+      <div class="drop" id="drop">
+        <div class="big"><svg viewBox="0 0 24 24"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 19h14"/></svg></div>
+        <h3>把登分表拖到这里</h3>
+        <p>支持 Excel 文件（.xlsx）。表里有“班级”“姓名”和各科成绩即可。</p>
+        <button class="btn pri lg" id="pick">选择文件</button>
+        <input type="file" id="file" accept=".xlsx,.xlsm" class="hide">
+        <div class="tpl">还没有登分表？空白模板：<span id="tpls"></span></div>
+      </div>
+      <div class="sect">
+        <div class="row"><h2>最近的考试</h2><div class="sp"></div><button class="btn ghost" onclick="call('open_output',{})">打开结果文件夹</button></div>
+        <div class="card list" id="recent"></div>
+      </div>
+    </section>
+
+    <!-- ================= 核算向导 ================= -->
+    <section class="page" id="wizard">
+      <div id="wizEmpty" class="empty"><h2>还没有导入登分表</h2><p>先在“开始”页把登分表拖进来。</p><button class="btn pri" onclick="go('home')">去导入</button></div>
+      <div id="wizBody" class="hide">
+        <div class="eyebrow">新的核算</div>
+        <h1>确认这次考试的设置</h1>
+        <div class="steps">
+          <div class="step done"><i>✓</i>导入登分表</div><div class="ln"></div>
+          <div class="step cur"><i>2</i>确认设置</div><div class="ln"></div>
+          <div class="step"><i>3</i>查看结果</div>
+        </div>
+        <div class="wiz">
+          <div class="card pad"><h2 style="margin-bottom:10px">已读入</h2><div id="insKv"></div><div class="notes" id="insNotes"></div></div>
+          <div class="card pad">
+            <div class="banner hide" id="wizErr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.2v.3"/></svg><div></div></div>
+            <div class="form">
+              <div class="field"><label>算法方案</label><div class="seg" id="scheme"></div><div class="hint" id="schemeHint"></div></div>
+              <div class="grid2">
+                <div class="field"><label>考试名称</label><input class="inp" id="exam"><div class="hint" id="examHint"></div></div>
+                <div class="field"><label>考试日期 <span style="font-weight:400;color:var(--faint)">（可不填）</span></label><input class="inp" id="date" placeholder="如 2026年10月20日"></div>
+              </div>
+              <div class="field"><label>科目与满分</label><div class="chips" id="fullChips"></div><div class="hint">和这次考试不一样的，直接改数字。红色的科目还没有满分，需要填上。</div></div>
+              <div class="field"><label>升学线：全级前百分之几</label><div class="range"><input type="range" id="ratio" min="30" max="100" step="1"><b id="rv"></b></div></div>
+              <div class="field" id="fEnr"><label>各班应考人数</label><div class="cls6" id="enr"></div></div>
+              <div class="field" id="fPrev"><label>上次考试的结构分名次 <span style="font-weight:400;color:var(--faint)">（增值评价用；没有上次成绩就全部空着）</span></label><div class="cls6" id="prev"></div></div>
+              <div class="row"><div class="sp"></div><button class="btn sec" onclick="go('home')">重新选文件</button><button class="btn pri lg" id="run">开始计算</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 结果 ================= -->
+    <section class="page" id="result">
+      <div id="resEmpty" class="empty"><h2>还没有核算结果</h2><p>导入登分表核算一次，或者从“最近的考试”里打开。</p><button class="btn pri" onclick="go('home')">去开始页</button></div>
+      <div id="resBody" class="hide">
+        <div class="head">
+          <div><div class="eyebrow" id="rMeta"></div><h1 id="rTitle"></h1></div>
+          <div class="sp"></div>
+          <button class="btn pri" onclick="go('export')"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>导出</button>
+        </div>
+        <div class="kpis" id="kpis"></div>
+        <div class="tabs" id="tabs">
+          <button data-t="ov" class="on">概览</button><button data-t="st">班级结构分</button><button data-t="cl">各班统计</button>
+          <button data-t="te">教师排名</button><button data-t="de">成绩明细</button><button data-t="ba">分数段</button><button data-t="ne">临界生</button>
+        </div>
+        <div class="pane on" id="ov"><div class="two">
+          <div class="card pad"><div class="row" style="margin-bottom:8px"><h2 id="ovTitle">班级结构分</h2><div class="sp"></div><span class="tag" id="ovTag"></span></div><div id="ovRank"></div></div>
+          <div class="card pad"><div class="row" style="margin-bottom:14px"><h2>主要结论</h2><div class="sp"></div><span class="tag g">自动起草 · 请审核</span></div><ul class="find" id="ovFind"></ul><div class="notes" id="ovNotes"></div></div>
+        </div></div>
+        <div class="pane" id="st"><div class="card scroll"><table id="stT"></table></div><p class="count" id="stNote" style="margin-top:10px"></p></div>
+        <div class="pane" id="cl"><div class="card scroll"><table id="clT"></table></div><p class="count" id="clNote" style="margin-top:10px"></p></div>
+        <div class="pane" id="te"><div class="tgrid" id="teG"></div></div>
+        <div class="pane" id="de">
+          <div class="tools"><div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input class="inp" id="q" placeholder="搜索姓名或考号"></div>
+            <div class="fchips" id="fc"></div><div class="sp"></div><span class="count" id="cnt"></span></div>
+          <div class="card scroll"><table id="deT"></table></div>
+        </div>
+        <div class="pane" id="ba"><div class="card pad"><div class="row" style="margin-bottom:6px"><h2>线上学生分数段分布</h2><div class="sp"></div><div class="legend" id="lg"></div></div><div id="baB"></div><p class="count" style="margin-top:10px">仅供参考。横条长度表示这一段的人数，深浅区分班级。</p></div></div>
+        <div class="pane" id="ne"><div class="two">
+          <div class="card"><div class="pad" style="padding-bottom:6px"><h2>线下临界生 <span class="tag d" id="nd"></span></h2><p class="sub" style="font-size:13px">差一点上线，冲线重点</p></div><div class="scroll" style="max-height:380px"><table id="neD"></table></div></div>
+          <div class="card"><div class="pad" style="padding-bottom:6px"><h2>线上临界生 <span class="tag a" id="nu"></span></h2><p class="sub" style="font-size:13px">刚过线，需要稳住</p></div><div class="scroll" style="max-height:380px"><table id="neU"></table></div></div>
+        </div></div>
+      </div>
+    </section>
+
+    <!-- ================= 导出 ================= -->
+    <section class="page" id="export">
+      <div id="expEmpty" class="empty"><h2>还没有可以导出的结果</h2><p>先核算一次，或者从“最近的考试”里打开。</p><button class="btn pri" onclick="go('home')">去开始页</button></div>
+      <div id="expBody" class="hide">
+        <div class="eyebrow" id="eMeta">导出</div>
+        <h1>把结果带走</h1>
+        <p class="sub" style="margin-bottom:24px">Excel 带公式，改参数自动重算；PDF 适合直接发到教师群。导出后会自动打开所在的文件夹。</p>
+        <div class="exp">
+          <div class="card pad">
+            <div class="xico x">XLSX</div>
+            <h2>统计表（Excel）</h2>
+            <div class="ul"><div>各班统计 · 班级结构分 · 教师排名</div><div>成绩明细（级名次、班名次、动态序号）</div><div>分数段 · 临界生名单 · 参数设置</div></div>
+            <button class="btn pri lg" id="xlsBtn">导出 Excel</button>
+          </div>
+          <div class="card pad">
+            <div class="xico p">PDF</div>
+            <div class="row" style="margin-bottom:6px"><h2>发布版（PDF）</h2><div class="sp"></div><button class="btn ghost" style="height:28px;padding:0" id="allBtn">全选</button></div>
+            <div id="pdfList"></div>
+            <div class="row" style="margin-top:16px"><span class="count">A4 横版 · 按所选内容连续编页</span><div class="sp"></div><button class="btn pri lg" id="pdfBtn">导出 PDF</button></div>
+          </div>
+          <div class="lock"><div class="card">
+            <div class="big"><svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg></div>
+            <h2 style="font-size:19px;margin-bottom:6px" id="lockTitle">试用已结束</h2>
+            <p class="sub" style="margin-bottom:18px">核算和查看结果不受影响。<br>导出 Excel 和 PDF 需要先激活。</p>
+            <button class="btn pri lg" onclick="openAct()">输入激活码</button>
+          </div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 设置 ================= -->
+    <section class="page" id="settings">
+      <div class="eyebrow">设置</div>
+      <h1>学校与算法</h1>
+      <p class="sub" style="margin-bottom:18px">一般一学期改一次。</p>
+      <div class="set"><div><h2>学校</h2><p class="d">印在发布版上。落款里的“{年级}”会自动换成七年级、八年级、九年级。</p></div>
+        <div><div class="grid2"><div class="field"><label>学校名称</label><input class="inp" id="sSchool"></div><div class="field"><label>落款</label><input class="inp" id="sOrg"></div></div></div></div>
+      <div class="set"><div><h2>科目与满分</h2><p class="d">这里是默认值，每次核算时还可以临时改。黄色的是还没定的。</p></div><div class="chips" id="setChips"></div></div>
+      <div class="set"><div><h2>&nbsp;</h2></div><div class="row"><button class="btn pri" id="saveBtn">保存</button><span class="saved" id="saved">已保存</span></div></div>
+      <div class="set"><div><h2>各年级科目</h2><p class="d">空白登分表模板按这个生成</p></div><div id="gs" style="display:grid;gap:8px"></div></div>
+      <div class="set"><div><h2>班级结构分</h2><p class="d">各项分值</p></div><div id="wtAll" style="display:grid;gap:14px"></div></div>
+      <div class="set"><div><h2>任课总表</h2><p class="d">教师、任教班级、各班应考人数。没有它也能算，只是不出教师排名。</p></div>
+        <div class="row" style="flex-wrap:wrap"><span class="tag" id="tInfo"></span><div class="sp"></div><button class="btn sec" id="tOpen">打开修改</button><button class="btn sec" id="tPick">导入一份</button><input type="file" id="tFile" accept=".xlsx" class="hide"><button class="btn ghost" onclick="call('template',{key:'任课总表'})">空白模板</button></div></div>
+      <div class="set" id="setLicRow"><div><h2>使用许可</h2><p class="d">一台电脑一个激活码</p></div>
+        <div class="row"><span class="tag" id="setLic"></span><span class="count" id="setMachine"></span><div class="sp"></div><button class="btn sec" onclick="openAct()">输入激活码</button></div></div>
+    </section>
+  </main>
+</div>
+
+<!-- 激活弹窗 -->
+<div class="mask" id="mask">
+  <div class="modal">
+    <div class="eyebrow">使用许可</div>
+    <h2>激活这台电脑</h2>
+    <p class="sub">激活后可以导出 Excel 和 PDF。一个激活码只对这一台电脑有效。</p>
+    <div class="stepn"><i>1</i><div><b>把机器码发给管理员</b><p>管理员会根据它生成激活码。</p>
+      <div class="code"><span id="machine"></span><span class="sp"></span><button class="btn sec" style="height:32px;letter-spacing:0;font-family:var(--sans)" id="copyBtn">复制</button></div></div></div>
+    <div class="stepn"><i>2</i><div><b>把收到的激活码粘贴到这里</b>
+      <textarea class="inp" style="margin-top:8px" id="code" placeholder="粘贴激活码…"></textarea><div class="msgerr" id="actErr"></div></div></div>
+    <div class="row" style="margin-top:8px"><span class="count">不需要联网</span><div class="sp"></div><button class="btn sec" onclick="closeAct()">以后再说</button><button class="btn pri" id="actBtn">激活</button></div>
+  </div>
+</div>
+<div class="busy" id="busy"><div><span class="spin"></span><span id="busyText">正在计算…</span></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const f2 = v => Number(v).toFixed(2), f1 = v => Number(v).toFixed(1), pc = v => (v * 100).toFixed(1) + "%";
+const num = v => Number.isInteger(Number(v)) ? String(Number(v)) : Number(v).toFixed(1);
+const CK = '<span class="box"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
+const ICON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.2v.3"/></svg>';
+let ST = null, INS = null, V = null, schemeIdx = 0, curCls = "全部";
+
+// ---------- 与本地服务通信
+async function post(name, body, query){
+  const isBlob = body instanceof Blob;
+  const r = await fetch("/api/" + name + (query || ""), {method: "POST", headers: {"X-Token": TOKEN, ...(isBlob ? {} : {"Content-Type": "application/json"})}, body: isBlob ? body : JSON.stringify(body || {})});
+  const j = await r.json();
+  if (!j.ok) { const e = new Error(j.error || "出错了"); e.license = j.license; throw e; }
+  return j.data;
+}
+async function call(name, body){ try { return await post(name, body); } catch (e) { toast(e.message); } }
+function busy(t){ $("#busyText").textContent = t || "请稍候…"; $("#busy").classList.add("on"); }
+function idle(){ $("#busy").classList.remove("on"); }
+function toast(t, ms){ const e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove("on"), ms || 2600); }
+function go(p){ $$(".page").forEach(x => x.classList.toggle("on", x.id === p)); $$("#nav button").forEach(b => b.classList.toggle("on", b.dataset.p === p)); $(".main").scrollTop = 0; if (p === "settings") loadSettings(); if (p === "home") refresh(); }
+$$("#nav button").forEach(b => b.onclick = () => go(b.dataset.p));
+$$("#tabs button").forEach(b => b.onclick = () => { $$("#tabs button").forEach(x => x.classList.toggle("on", x === b)); $$(".pane").forEach(x => x.classList.toggle("on", x.id === b.dataset.t)); });
+
+// ---------- 许可
+function paintLicense(L){
+  ST.license = L;
+  const card = $("#lic"), open = L.state === "open";
+  card.className = "lic" + (open ? " open" : L.state === "active" ? " ok" : L.state === "expired" ? " end" : "");
+  document.body.classList.toggle("end", !L.canExport);
+  $("#setLicRow").classList.toggle("hide", open);
+  if (open) return;
+  const txt = L.state === "active" ? "已激活" : L.state === "trial" ? `试用中 · 还剩 ${L.daysLeft} 天` : "试用已结束";
+  $("#licText").textContent = txt;
+  $("#licBar").style.display = L.state === "trial" ? "" : "none";
+  $("#licBar i").style.width = Math.max(8, Math.min(100, (L.daysLeft || 0) / (L.trialDays || 3) * 100)) + "%";
+  $("#licLink").textContent = L.state === "active" ? "有效期至 " + L.expiry : "输入激活码 →";
+  const t = $("#setLic"); t.textContent = L.state === "active" ? "已激活 · 有效期至 " + L.expiry : txt; t.className = "tag " + (L.state === "active" ? "a" : L.state === "expired" ? "d" : "g");
+  $("#setMachine").textContent = "机器码　" + (L.machine || ""); $("#machine").textContent = L.machine || "";
+  $("#lockTitle").textContent = L.message && L.state !== "expired" ? L.message : "试用已结束";
+}
+function openAct(){ $("#actErr").textContent = ""; $("#mask").classList.add("on"); setTimeout(() => $("#code").focus(), 50); }
+function closeAct(){ $("#mask").classList.remove("on"); }
+$("#mask").onclick = e => { if (e.target.id === "mask") closeAct(); };
+$("#copyBtn").onclick = async () => { const t = $("#machine").textContent; try { await navigator.clipboard.writeText(t); } catch (e) { const r = document.createRange(); r.selectNode($("#machine")); getSelection().removeAllRanges(); getSelection().addRange(r); document.execCommand("copy"); } toast("机器码已复制"); };
+$("#actBtn").onclick = async () => { try { const L = await post("activate", {code: $("#code").value}); paintLicense(L); closeAct(); $("#code").value = ""; toast("激活成功，有效期至 " + L.expiry, 3600); } catch (e) { $("#actErr").textContent = e.message; } };
+
+// ---------- 开始页
+async function refresh(){
+  ST = await post("state");
+  $("#schoolName").textContent = ST.school; $("#ver").textContent = "版本 " + ST.version;
+  $("#tpls").innerHTML = ST.templates.map(k => `<a data-k="${esc(k)}">${esc(k)}</a>`).join(" · ");
+  $$("#tpls a").forEach(a => a.onclick = async ev => { ev.stopPropagation(); const r = await call("template", {key: a.dataset.k}); if (r) toast("已在文件夹里选中：" + r.name); });
+  $("#recent").innerHTML = ST.recent.length ? ST.recent.map(r => `<div class="li" data-n="${esc(r.name)}"><div><b>${esc(r.name)}</b></div><span>${esc(r.grade)} · ${esc(r.scheme)}</span><span>${r.n} 人</span><span>${esc(r.date || r.savedAt)}</span><span class="chev">›</span></div>`).join("")
+    : `<div class="li none">还没有核算过。把登分表拖到上面试试；想先看看效果，可以用 samples 文件夹里的示例登分表。</div>`;
+  $$("#recent .li[data-n]").forEach(d => d.onclick = async () => { busy("正在打开…"); try { V = await post("open_run", {name: d.dataset.n}); renderResult(); go("result"); } catch (e) { toast(e.message); } idle(); });
+  paintLicense(ST.license);
+}
+const drop = $("#drop");
+$("#pick").onclick = e => { e.stopPropagation(); $("#file").click(); };
+drop.onclick = () => $("#file").click();
+$("#file").onchange = e => { if (e.target.files[0]) importFile(e.target.files[0]); e.target.value = ""; };
+["dragenter", "dragover"].forEach(t => window.addEventListener(t, e => { e.preventDefault(); if ($("#home").classList.contains("on")) drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => window.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+window.addEventListener("drop", e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) { go("home"); importFile(f); } });
+async function importFile(f){
+  busy("正在读取登分表…");
+  try { INS = await post("upload", f, "?name=" + encodeURIComponent(f.name)); buildWizard(); go("wizard"); }
+  catch (e) { toast(e.message, 5200); }
+  idle();
+}
+
+// ---------- 核算向导
+function buildWizard(){
+  const I = INS; schemeIdx = 0;
+  $("#wizEmpty").classList.add("hide"); $("#wizBody").classList.remove("hide"); $("#wizErr").classList.add("hide");
+  $("#insKv").innerHTML = [["文件", I.file], ["年级", I.grade], ["班级", I.classes.length + " 个班"], ["实考人数", I.n + " 人"], ["科目", I.subjects.length + " 科"],
+    ["任课教师", I.hasTeacherTable ? I.teacherCount + " 位" : "未提供任课总表"]].map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join("");
+  $("#scheme").innerHTML = I.schemes.map((s, i) => `<button class="${i ? "" : "on"}">${esc(s.name === "平时" ? "平时考试" : s.name === "中考" ? "中考核算" : s.name)}</button>`).join("");
+  $$("#scheme button").forEach((b, i) => b.onclick = () => { schemeIdx = i; $$("#scheme button").forEach(x => x.classList.toggle("on", x === b)); paintScheme(); });
+  $("#exam").value = I.defaultName; $("#date").value = "";
+  $("#exam").oninput = () => { $("#examHint").textContent = I.nameTaken.includes($("#exam").value.trim()) ? "这个名称以前算过，再算会覆盖原来的结果。想两份都留，请改个名称。" : ""; }; $("#exam").oninput();
+  $("#fullChips").innerHTML = I.subjects.map(s => `<div class="chip${I.full[s] ? "" : " need"}"><span>${esc(s)}</span><input data-s="${esc(s)}" value="${I.full[s] ? num(I.full[s]) : ""}" placeholder="满分" inputmode="decimal"></div>`).join("");
+  $$("#fullChips input").forEach(i => i.oninput = () => i.parentNode.classList.toggle("need", !(Number(i.value) > 0)));
+  const r = $("#ratio"); r.value = Math.round(I.ratio * 100); r.oninput = () => $("#rv").textContent = r.value + "%"; r.oninput();
+  const cols = `repeat(${Math.min(I.classes.length, 6)},1fr)`;
+  $("#enr").style.gridTemplateColumns = cols; $("#prev").style.gridTemplateColumns = cols;
+  $("#enr").innerHTML = I.classes.map(c => `<div class="mini${I.enrolled[c] ? "" : " need"}"><small>${esc(c)} · 实考 ${I.counts[c]}</small><input data-c="${esc(c)}" value="${I.enrolled[c] ?? ""}" placeholder="人数" inputmode="numeric"></div>`).join("");
+  $$("#enr input").forEach(i => i.oninput = () => i.parentNode.classList.toggle("need", !(Number(i.value) > 0)));
+  $("#prev").innerHTML = I.classes.map(c => `<div class="mini"><small>${esc(c)}</small><input data-c="${esc(c)}" placeholder="名次" inputmode="numeric"></div>`).join("");
+  paintScheme();
+}
+function paintScheme(){
+  const I = INS, s = I.schemes[schemeIdx];
+  $("#schemeHint").textContent = "单科得分 = " + s.formula;
+  $("#fEnr").classList.toggle("hide", !s.needEnrolled); $("#fPrev").classList.toggle("hide", !s.needPrev);
+  const notes = [];
+  if (I.excluded.length) notes.push(`<b>${I.excluded.length} 人未计入</b><br>` + I.excluded.slice(0, 6).map(e => `${esc(e["班级"])} ${esc(e["姓名"])}：${esc(String(e["原因"]).replace(/：/g, ""))}`).join("<br>") + (I.excluded.length > 6 ? `<br>…等 ${I.excluded.length} 人` : ""));
+  if (s.note) notes.push(esc(s.note));
+  if (I.emptySubjects.length) notes.push(`${esc(I.emptySubjects.join("、"))} 整列没有成绩，本次不计算。`);
+  if (I.ignoredCols.length) notes.push(`这些列没当成科目，已忽略：${esc(I.ignoredCols.join("、"))}`);
+  if (!I.hasTeacherTable) notes.push("没有任课总表，本次不出教师排名。可以在“设置”里导入。");
+  $("#insNotes").innerHTML = notes.map(n => `<div class="note">${ICON}<div>${n}</div></div>`).join("");
+}
+$("#run").onclick = async () => {
+  const I = INS, s = I.schemes[schemeIdx], pick = sel => Object.fromEntries($$(sel).map(i => [i.dataset.s || i.dataset.c, i.value.trim()]));
+  const opts = {scheme: s.name, grade: I.grade, exam: $("#exam").value.trim(), date: $("#date").value.trim(), full: pick("#fullChips input"), ratio: Number($("#ratio").value) / 100,
+    enrolled: s.needEnrolled ? pick("#enr input") : {}, prev: s.needPrev ? pick("#prev input") : {}};
+  busy("正在计算…");
+  try { V = await post("compute", opts); $("#wizErr").classList.add("hide"); renderResult(); go("result"); toast("核算完成"); }
+  catch (e) { const b = $("#wizErr"); b.lastElementChild.textContent = e.message; b.classList.remove("hide"); $(".main").scrollTop = 0; }
+  idle();
+};
+
+// ---------- 结果
+const best = (arr, v) => new Set(arr).size < 2 ? "" : v === Math.max(...arr) ? " class='hi'" : v === Math.min(...arr) ? " class='lo'" : "";
+function renderResult(){
+  const D = V; curCls = "全部";
+  $("#resEmpty").classList.add("hide"); $("#resBody").classList.remove("hide"); $("#expEmpty").classList.add("hide"); $("#expBody").classList.remove("hide");
+  $$("#tabs button").forEach((x, i) => x.classList.toggle("on", !i)); $$(".pane").forEach(x => x.classList.toggle("on", x.id === "ov"));
+  $("#rMeta").textContent = [D.grade, D.scheme + "方案", D.date].filter(Boolean).join(" · "); $("#rTitle").textContent = D.exam; $("#eMeta").textContent = "导出 · " + D.exam;
+  const hasS = D.structure.length > 0, S = [...D.structure].sort((a, b) => a["名次"] - b["名次"]), C = [...D.classes].sort((a, b) => a.rank - b.rank);
+  const lead = hasS ? ["结构分第一", S[0].name, f2(S[0]["结构分"]), S[1] ? `第二名 ${S[1].name} ${f2(S[1]["结构分"])}` : ""] : ["综合第一", C[0].name, f2(C[0].composite), ""];
+  $("#kpis").innerHTML = [["实考人数", D.n, "人", D.excluded.length ? `另有 ${D.excluded.length} 人成绩不全，未计入` : "全部计入"], ["升学线", num(D.cut), "分", `全级前 ${Math.round(D.ratio * 100)}% · 满分 ${num(D.totalFull)}`],
+    ["线上人数", D.above, "人", `线下 ${D.below} 人`], lead].map(([k, v, u, d]) => `<div class="card kpi"><div class="k">${k}</div><div class="v">${esc(v)}<small>${u}</small></div><div class="d">${esc(d)}</div></div>`).join("");
+
+  // 概览
+  const W = D.weights, hasAdd = "增值评价" in W, hasTop = "前10名每人加分" in W;
+  $("#ovTitle").textContent = hasS ? "班级结构分" : "各班综合得分"; $("#ovTag").textContent = hasS ? "满分 100" + (hasTop ? " + 加分" : "") : D.subjects.length + " 科得分之和";
+  const rows = hasS ? S.map(x => ({no: x["名次"], name: x.name, val: x["结构分"], sub: hasAdd ? (x["上次名次"] ? (() => { const mv = x["上次名次"] - x["小计名次"]; return `上次第 ${x["上次名次"]} 名 ${mv > 0 ? `<span class="hi">↑ 进步 ${mv} 名</span>` : mv < 0 ? `<span class="lo">↓ 退步 ${-mv} 名</span>` : "· 持平"}　增值评价 ${f2(x["增值评价分"])}`; })() : `前四项小计第 ${x["小计名次"]} 名　增值评价 ${f2(x["增值评价分"])}`)
+      : hasTop ? `全级前 10 名 ${x["前10名人数"]} 人　加分 ${f2(x["加分"])}` : ""}))
+    : C.map(c => ({no: c.rank, name: c.name, val: c.composite, sub: `上线 ${c.online}/${c.n}`}));
+  const mx = Math.max(...rows.map(r => r.val));
+  $("#ovRank").innerHTML = rows.map(r => `<div class="rk${r.no === 1 ? " first" : ""}"><span class="no">${r.no}</span><span class="nm">${esc(r.name)}</span><div class="tr"><i style="width:${r.val / mx * 100}%"></i></div><span class="sc">${f2(r.val)}</span>${r.sub ? `<span class="mv">${r.sub}</span>` : ""}</div>`).join("");
+  $("#ovFind").innerHTML = D.conclusions.map(c => `<li>${esc(c)}</li>`).join("");
+  $("#ovNotes").innerHTML = D.messages.map(m => `<div class="note">${ICON}<div>${esc(m)}</div></div>`).join("");
+
+  // 班级结构分
+  if (hasS){
+    const it = D.rateItems;
+    $("#stT").innerHTML = `<thead><tr><th>名次</th><th class="l">班级</th>${"参考率" in W ? "<th>应考</th>" : ""}<th>实考</th>${it.map(k => `<th>${k}<span style="font-weight:400"> / ${num(W[k])}</span></th>`).join("")}<th>小计</th>${hasAdd ? `<th>增值评价 / ${num(W["增值评价"])}</th>` : ""}${hasTop ? "<th>前 10 名加分</th>" : ""}<th>结构分</th></tr></thead><tbody>` +
+      S.map(x => `<tr><td><span class="pill${x["名次"] === 1 ? " g" : ""}">${x["名次"]}</span></td><td class="l b">${esc(x.name)}</td>${"参考率" in W ? `<td class="m">${x["应考人数"]}</td>` : ""}<td class="m">${x["实考人数"]}</td>` +
+        it.map(k => `<td${best(S.map(y => y[k + "分"]), x[k + "分"])}>${f2(x[k + "分"])}<span class="s">${pc(x[k])}</span></td>`).join("") + `<td>${f2(x["小计"])}<span class="s">第 ${x["小计名次"]}</span></td>` +
+        (hasAdd ? `<td>${f2(x["增值评价分"])}<span class="s">${x["上次名次"] ? "上次第 " + x["上次名次"] : "无上次名次"}</span></td>` : "") + (hasTop ? `<td>${f2(x["加分"])}<span class="s">${x["前10名人数"]} 人</span></td>` : "") +
+        `<td class="b" style="font-size:15px">${f2(x["结构分"])}</td></tr>`).join("") + "</tbody>";
+    $("#stNote").textContent = "各项直接按比例折分（比率 × 分值），小字是比率。全科合格 / 全科优秀 = 每一科都达标的学生占实考人数的比例。" + (hasAdd && !D.hasPrev ? "本次没有填上次名次，增值评价只按本次名次给分。" : "");
+  } else { $("#stT").innerHTML = ""; $("#stNote").textContent = "这个方案没有设置班级结构分。"; }
+
+  // 各班统计
+  $("#clT").innerHTML = `<thead><tr><th>名次</th><th class="l">班级</th><th>实考</th>${D.subjects.map(s => `<th>${esc(s)}</th>`).join("")}<th>综合得分</th><th>上线率</th></tr></thead><tbody>` +
+    C.map(c => `<tr><td><span class="pill${c.rank === 1 ? " g" : ""}">${c.rank}</span></td><td class="l b">${esc(c.name)}</td><td class="m">${c.n}</td>` + D.subjects.map(s => `<td${best(C.map(y => y.subj[s].score), c.subj[s].score)}>${f2(c.subj[s].score)}<span class="s">均分 ${f1(c.subj[s].avg)}</span></td>`).join("") +
+      `<td class="b" style="font-size:15px">${f2(c.composite)}</td><td>${f1(c.onlineRate)}%</td></tr>`).join("") + "</tbody>";
+  $("#clNote").textContent = `单科得分 = ${D.formula}；综合得分 = 各科得分之和。每列绿色最高、红色最低。`;
+
+  // 教师排名
+  $("#teG").innerHTML = D.teachers.length ? D.subjects.map(s => { const T = D.teachers.filter(t => t.subject === s).sort((a, b) => a.rank - b.rank); if (!T.length) return "";
+    return `<div class="card tcard"><h3>${esc(s)}<small>满分 ${num(D.full[s])}</small></h3><table><thead><tr><th>名次</th><th class="l">教师</th><th class="l">任教班级</th><th>人数</th><th>均分</th><th>及格率</th><th>优秀率</th><th>得分</th></tr></thead><tbody>` +
+      T.map(t => `<tr><td><span class="pill${t.rank === 1 ? " g" : ""}">${t.rank}</span></td><td class="l b">${esc(t.name)}</td><td class="l m">${esc(t.classes)}</td><td class="m">${t.n}</td><td>${f2(t.avg)}</td><td>${f1(t.pass)}%</td><td>${f1(t.exc)}%</td><td class="b">${f2(t.score)}</td></tr>`).join("") + "</tbody></table></div>"; }).join("")
+    : `<div class="card empty" style="grid-column:1/-1"><h2>没有教师排名</h2><p>任课总表里没有这个年级的任课安排。可以在“设置”里导入或修改任课总表，再重新核算。</p></div>`;
+
+  // 成绩明细
+  const names = D.classes.map(c => c.name);
+  $("#fc").innerHTML = ["全部", ...names].map(n => `<button class="${n === curCls ? "on" : ""}">${esc(n)}</button>`).join("");
+  $$("#fc button").forEach(b => b.onclick = () => { curCls = b.textContent; $$("#fc button").forEach(x => x.classList.toggle("on", x === b)); drawStudents(); });
+  $("#q").value = ""; $("#q").oninput = drawStudents; drawStudents();
+
+  // 分数段
+  const shades = i => Math.max(0.2, 1 - i * (0.8 / Math.max(names.length, 1)));
+  $("#lg").innerHTML = names.map((n, i) => `<span><i style="background:var(--accent);opacity:${shades(i)}"></i>${esc(n)}</span>`).join("");
+  const bm = Math.max(...D.bands.map(b => b.total), 1);
+  $("#baB").innerHTML = D.bands.map(b => `<div class="band"><span class="lab">${esc(b.label.replace("（线上最低段）", ""))}</span><div class="stk" style="width:${Math.max(b.total / bm * 100, 2)}%">${names.map((n, i) => `<i title="${esc(n)} ${b.counts[n]} 人" style="flex:${b.counts[n]};background:var(--accent);opacity:${shades(i)}"></i>`).join("")}</div><b>${b.total}</b></div>`).join("") +
+    `<div class="band"><span class="lab" style="color:var(--down)">线下（${num(D.cut)} 分以下）</span><div class="stk" style="width:${Math.max(D.below / bm * 100, 2)}%"><i style="flex:1;background:var(--down);opacity:.55"></i></div><b>${D.below}</b></div>`;
+
+  // 临界生
+  const nt = L => L.length ? `<thead><tr><th class="l">班级</th><th class="l">姓名</th><th>总分</th><th>距线</th><th class="l">薄弱学科</th></tr></thead><tbody>` + L.map(x => `<tr><td class="l m">${esc(x.cls)}</td><td class="l b">${esc(x.name)}</td><td>${num(x.total)}</td><td class="${x.gap < 0 ? "lo" : "hi"}">${x.gap > 0 ? "+" : ""}${x.gap}</td><td class="l"><span class="tag">${esc(x.weak)}</span></td></tr>`).join("") + "</tbody>" : `<tbody><tr><td class="l m">无</td></tr></tbody>`;
+  const dn = D.near.filter(x => x.pos === "线下"), up = D.near.filter(x => x.pos === "线上");
+  $("#nd").textContent = dn.length + " 人"; $("#nu").textContent = up.length + " 人"; $("#neD").innerHTML = nt(dn); $("#neU").innerHTML = nt(up);
+
+  // 导出页
+  const tips = {"成绩通报": "总体情况、综合排名、主要结论", "各科得分": "各班各科得分", "各科明细": "平均分、及格率、优秀率", "班级结构分": "各项得分与名次", "分数段": "仅供参考", "前N名": "各班人数分布", "教师排名": "同学科内排名", "临界生名单": "含学生姓名，仅限教师"};
+  $("#pdfList").innerHTML = D.sections.map(k => `<label class="ck"><input type="checkbox" value="${esc(k)}" ${(ST.pdfDefaults[k] ?? true) ? "checked" : ""}>${CK}<b>${esc(k)}</b><span>${tips[k] || ""}</span></label>`).join("");
+}
+function drawStudents(){
+  const D = V, q = $("#q").value.trim(), ns = D.subjects.length;
+  const rows = D.students.filter(r => (curCls === "全部" || r[0] === curCls) && (!q || String(r[1]).includes(q) || String(r[2]).includes(q)));
+  $("#cnt").textContent = `共 ${rows.length} 人`;
+  $("#deT").innerHTML = `<thead><tr><th>序号</th><th class="l">班级</th><th class="l">姓名</th><th class="l">考号</th>${D.subjects.map(s => `<th>${esc(s)}</th>`).join("")}<th>总分</th><th>级名次</th><th>班名次</th></tr></thead><tbody>` +
+    rows.map((r, i) => `<tr><td class="m">${i + 1}</td><td class="l">${esc(r[0])}</td><td class="l b">${esc(r[1])}</td><td class="l m">${esc(r[2])}</td>${r.slice(3, 3 + ns).map(v => `<td>${num(v)}</td>`).join("")}<td class="b">${num(r[3 + ns])}</td><td>${r[4 + ns]}</td><td>${r[5 + ns]}</td></tr>`).join("") + "</tbody>";
+}
+
+// ---------- 导出
+async function doExport(name, body, label){
+  busy("正在导出" + label + "…");
+  try { const r = await post(name, body); toast("已导出：" + r.name, 3600); }
+  catch (e) { if (e.license) { paintLicense(await post("state").then(s => s.license)); openAct(); } else toast(e.message, 5200); }
+  idle();
+}
+$("#xlsBtn").onclick = () => doExport("export_excel", {}, " Excel");
+$("#pdfBtn").onclick = () => doExport("export_pdf", {sections: $$("#pdfList input:checked").map(i => i.value)}, " PDF");
+$("#allBtn").onclick = () => $$("#pdfList input").forEach(i => i.checked = true);
+
+// ---------- 设置
+async function loadSettings(){
+  const s = await call("settings"); if (!s) return;
+  $("#sSchool").value = s.school; $("#sOrg").value = s.org;
+  $("#setChips").innerHTML = Object.entries(s.full).map(([k, v]) => `<div class="chip${v ? "" : " warn"}"><span>${esc(k)}</span><input data-s="${esc(k)}" value="${v ? num(v) : ""}" placeholder="待定" inputmode="decimal"></div>`).join("");
+  $("#gs").innerHTML = Object.entries(s.gradeSubjects).map(([g, L]) => `<div class="kv" style="border:0;padding:2px 0"><span style="width:64px;flex:none">${esc(g)}</span><b style="font-weight:500;text-align:left;flex:1">${esc(L.join("、"))}</b></div>`).join("");
+  $("#wtAll").innerHTML = Object.entries(s.schemes).map(([n, x]) => { const w = Object.entries(x.weights).filter(([k]) => !k.includes("名次差") && !k.includes("进退步"));
+    return w.length ? `<div><div class="count" style="margin-bottom:6px">${esc(n === "平时" ? "平时考试" : n === "中考" ? "中考核算" : n)}</div><div class="wt" style="grid-template-columns:repeat(${w.length},1fr)">${w.map(([k, v]) => `<div class="mini"><small>${esc(k)}</small><b>${num(v)}</b></div>`).join("")}</div></div>` : ""; }).join("") +
+    `<p class="count">分值和算法比例写在程序文件夹的 config/学校设置.yaml 里，用记事本可以改。</p>`;
+  paintTeacher(s.teacher); if (ST) paintLicense(s.license);
+}
+function paintTeacher(t){ const e = $("#tInfo"); e.textContent = t.text; e.className = "tag " + (t.exists ? "a" : "g"); }
+$("#saveBtn").onclick = async () => { const r = await call("settings_save", {school: $("#sSchool").value, org: $("#sOrg").value, full: Object.fromEntries($$("#setChips input").map(i => [i.dataset.s, i.value.trim() || 0]))});
+  if (r) { $("#saved").classList.add("on"); setTimeout(() => $("#saved").classList.remove("on"), 1800); loadSettings(); refresh(); } };
+$("#tOpen").onclick = async () => { const r = await call("teacher_open"); if (r) { paintTeacher(r); toast("已用 Excel 打开任课总表，改完保存即可"); } };
+$("#tPick").onclick = () => $("#tFile").click();
+$("#tFile").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; busy("正在导入任课总表…"); try { paintTeacher(await post("teacher_upload", f, "?name=" + encodeURIComponent(f.name))); toast("任课总表已导入"); } catch (err) { toast(err.message, 5200); } idle(); };
+
+refresh().catch(e => toast(e.message));
+setInterval(() => post("ping").catch(() => {}), 5000);
+</script>
+</body>
+</html>

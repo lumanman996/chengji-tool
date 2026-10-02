@@ -18,12 +18,13 @@ import sys
 import traceback
 from pathlib import Path
 
-from . import __version__
+from . import __version__, license as lic
 from .analysis import analyze, draft_conclusions
 from .config import load_enrolled, load_school, load_teachers, make_config, normalize_class
 from .excel_report import build_excel
 from .loader import check_data, load_scores
 from .paths import FROZEN, ROOT, ensure_layout
+from .service import clean_name, subject_note as _subject_note
 
 
 def clean_path(text: str) -> str:
@@ -116,11 +117,6 @@ def parse_sections(text: str, avail: list[str], all_names: list[str]) -> list[st
     return [n for n in avail if n in want]
 
 
-def clean_name(text: str) -> str:
-    """考试名称要当文件夹名用：去掉首尾空格和不能做文件名的符号。"""
-    return re.sub(r'[\\/:*?"<>|\r\n\t]+', "", text).strip().strip(".")
-
-
 def parse_ratio(text) -> float:
     t = str(text).strip().replace("％", "%")
     v = float(t.rstrip("%"))
@@ -185,17 +181,7 @@ def main(argv=None):
     a.方案 = a.方案 or names[0]
 
     # ---- 对照这个年级的固定科目，少了、多了提醒一句（不影响计算）
-    expect = school.expected_subjects(grade, a.方案)
-    subject_note = ""
-    if expect:
-        lack = [s for s in expect if s not in data.subjects]
-        more = [s for s in data.subjects if s not in expect]
-        if lack or more:
-            which = f"{a.方案}核算" if a.方案 in school.grade_subjects else f"{grade}平时考试"
-            subject_note = (f"【提示】{which}固定是 {len(expect)} 科（{'、'.join(expect)}），本次"
-                            + "，".join(x for x in (f"少了 {'、'.join(lack)}" if lack else "",
-                                                    f"多了 {'、'.join(more)}" if more else "") if x)
-                            + "。如果就是这样考的，不用管；否则请检查登分表。")
+    subject_note = _subject_note(school, grade, a.方案, data.subjects)
 
     # ---- 考试名称、日期：命令里没写就当场问。名称同时是结果文件夹和文件的名字
     default_name = clean_name(Path(a.登分表).stem)
@@ -346,6 +332,10 @@ def main(argv=None):
     concl = draft_conclusions(R)
     out = Path(a.输出) / exam
     out.mkdir(parents=True, exist_ok=True)
+    try:
+        lic.require_export()                                 # 试用到期且未激活时，不能导出
+    except lic.LicenseError as e:
+        sys.exit(f"{e}（核算结果可以在图形界面里查看；激活后才能导出 Excel 和 PDF）")
     xlsx = build_excel(R, out / f"{exam}_各班综合统计.xlsx", concl)
     print(f"已生成：{xlsx}")
     pdf_note = "发布版 PDF：未生成"
