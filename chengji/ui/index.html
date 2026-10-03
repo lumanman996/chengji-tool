@@ -267,6 +267,11 @@ textarea.inp{height:86px;padding:10px 12px;resize:none;font-family:ui-monospace,
 .tt input{height:36px;width:100%;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:0 10px;outline:none} .tt input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .tt .rm,.cinfo .rm{width:30px;height:30px;border-radius:8px;color:var(--faint);font-size:17px} .tt .rm:hover,.cinfo .rm:hover{background:var(--down-soft);color:var(--down)}
 .cinfo{display:flex;flex-wrap:wrap;gap:8px} .cinfo .chip input.c{width:56px;background:none;border:0;text-align:left;padding-left:12px;font-weight:600}
+/* 帮助页：联系作者 */
+.clist{display:grid;gap:12px;margin-top:10px}
+.clist .crow{display:flex;align-items:center;gap:10px;font-size:14.5px;flex-wrap:wrap}
+.clist .crow span{color:var(--muted);width:72px;flex:none} .clist .crow b{font-weight:600;word-break:break-all}
+.clist .btn{height:28px;padding:0 11px;font-size:12.5px}
 /* 帮助页 */
 .help{max-width:820px} .help h2{font-size:19px;margin:34px 0 10px;padding-top:6px} .help h2:first-of-type{margin-top:22px}
 .help p,.help li{color:var(--ink-2);line-height:1.85;font-size:14.5px} .help ol,.help ul{padding-left:22px;margin:4px 0}
@@ -523,7 +528,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
      <div class="help">
       <div class="eyebrow">帮助</div>
       <h1>怎么用、怎么算</h1>
-      <div class="toc"><a data-h="h1">三步上手</a><a data-h="h2">登分表怎么填</a><a data-h="h3">名词解释</a><a data-h="h4">怎么算的</a><a data-h="h5">试用与激活</a><a data-h="h6">常见问题</a><a data-h="h7">关于</a></div>
+      <div class="toc"><a data-h="h1">三步上手</a><a data-h="h2">登分表怎么填</a><a data-h="h3">名词解释</a><a data-h="h4">怎么算的</a><a data-h="h5">试用与激活</a><a data-h="h6">常见问题</a><a data-h="h8">联系作者</a><a data-h="h7">关于</a></div>
 
       <h2 id="h1">三步上手</h2>
       <ol><li><b>导入</b>：在“开始”页把登分表拖进来（没有登分表，可以在那里下载各年级的空白模板）。</li>
@@ -571,6 +576,14 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
         <b>改了一个分数想重算？</b><p>重新导入再算一遍。用同一个考试名称会覆盖原来的结果（会提醒）；想两份都留，换个名称。</p>
         <b>删错了考试？</b><p>删除的考试在结果文件夹的“已删除”里，把那个文件夹拖回上一层就恢复了。</p>
         <b>换电脑？</b><p>把数据文件夹整个拷过去就行；激活码要按新电脑的机器码重新申请。</p></div>
+
+      <h2 id="h8">联系作者</h2>
+      <p>用着有问题、有建议，或者想了解更多，欢迎联系：</p>
+      <div class="clist">
+        <div class="crow"><span>微信</span><b id="cWechat"></b><button class="btn sec" id="cWechatCopy">复制</button></div>
+        <div class="crow"><span>项目主页</span><b id="cGithub"></b><button class="btn sec" id="cGithubOpen">打开</button><button class="btn sec" id="cGithubCopy">复制网址</button></div>
+      </div>
+      <p class="count" style="margin-top:10px">项目主页在 GitHub 上，有完整的说明、更新记录和最新版本的下载。</p>
 
       <h2 id="h7">关于</h2>
       <p><b>分寸 · 成绩核算</b>　版本 <span id="aboutVer"></span></p>
@@ -729,6 +742,10 @@ async function refresh(){
   });
   $("#tryRow").classList.toggle("hide", !ST.hasSample);
   applyFont(ST.fontSize);
+  $("#cWechat").textContent = ST.contact.wechat; $("#cGithub").textContent = ST.contact.github.replace("https://", "");
+  $("#cWechatCopy").onclick = () => copyText(ST.contact.wechat, "已复制微信号：" + ST.contact.wechat);
+  $("#cGithubCopy").onclick = () => copyText(ST.contact.github, "已复制网址");
+  $("#cGithubOpen").onclick = () => call("open_repo");
   paintLicense(ST.license);
   if (ST.firstRun && !$("#welcome").dataset.shown) { $("#welcome").dataset.shown = "1"; $("#welcome").classList.add("on"); setTimeout(() => $("#wSchool").focus(), 80); }
 }

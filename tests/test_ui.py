@@ -508,3 +508,17 @@ def test_wizard_steps_all_visible(app, page):
     steps = page.locator(".steps .step")
     assert steps.count() == 3 and all(steps.nth(i).is_visible() for i in range(3))
     assert ["导入登分表" in steps.nth(0).inner_text(), "确认设置" in steps.nth(1).inner_text(), "查看结果" in steps.nth(2).inner_text()] == [True] * 3
+
+
+def test_contact_author_in_help(app, page):
+    """帮助页有“联系作者”：微信号和项目的 GitHub 网址，可以复制。激活窗口保持原样，不放二维码。"""
+    root, url = app
+    page.goto(url); page.wait_for_selector("#recent .li")
+    page.click('#nav button[data-p="help"]')
+    assert "联系作者" in page.locator(".toc").inner_text()
+    page.click('.toc a[data-h="h8"]')
+    assert page.inner_text("#cWechat") == "915274394"
+    assert page.inner_text("#cGithub") == "github.com/lumanman996/chengji-tool"
+    page.click("#cWechatCopy"); page.wait_for_selector("#toast.on")
+    assert "已复制微信号" in page.inner_text("#toast")
+    assert page.locator("#help img").count() == 0 and page.locator("#mask img").count() == 0      # 没有二维码

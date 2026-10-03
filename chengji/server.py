@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import yaml
 
-from . import REPO, __version__, license as lic
+from . import CONTACT, REPO, __version__, license as lic
 from . import service as sv
 from . import teachers as tt
 from .config import load_school, load_teachers
@@ -118,7 +118,7 @@ class App:
         loc = self._local()
         return {"version": __version__, "school": s.name, "nativeDialog": self.window is not None,
                 "firstRun": not loc.get("已引导") and not loc.get("学校") and not sv.list_runs(self.output, 1),
-                "fontSize": loc.get("界面字号") or "标准", "root": friendly_path(self.root), "hasSample": (self.root / "samples" / SAMPLE[0]).is_file(), "license": lic.status(), "recent": sv.list_runs(self.output),
+                "contact": CONTACT, "fontSize": loc.get("界面字号") or "标准", "root": friendly_path(self.root), "hasSample": (self.root / "samples" / SAMPLE[0]).is_file(), "license": lic.status(), "recent": sv.list_runs(self.output),
                 "templates": list(s.grade_subjects), "pdfDefaults": s.pdf_sections, "hasTeacherTable": self.teacher.is_file()}
 
     def api_welcome(self, body):
@@ -393,6 +393,13 @@ class App:
             raise ValueError("连不上网络，没法检查。可以稍后再试，或直接打开下载页看看。") from None
         latest = str(data.get("tag_name") or "").lstrip("vV")
         return {"current": __version__, "latest": latest, "newer": newer_version(latest, __version__)}
+
+    def api_open_repo(self, _=None):
+        """用系统浏览器打开项目主页（只有使用者点了才会打开）。"""
+        if not os.environ.get("CHENGJI_NO_OPEN"):
+            import webbrowser
+            webbrowser.open(CONTACT["github"])
+        return {}
 
     def api_open_releases(self, _=None):
         if not os.environ.get("CHENGJI_NO_OPEN"):
