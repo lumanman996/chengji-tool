@@ -115,15 +115,14 @@ def test_settings_saved_locally(app, page):
 def test_trial_expired_then_activate(app, page, tmp_path, monkeypatch):
     """试用到期：能算能看、不能导出；输入本机的激活码后可以导出。（需要本机有许可模块和生成器）"""
     impl = pytest.importorskip("chengji._license_impl")
-    if not (ROOT / "admin" / "keygen.py").is_file():
-        pytest.skip("没有激活码生成器")
+    if not (ROOT / "admin" / "make_code.py").is_file():
+        pytest.skip("没有发码程序")
     sys.path.insert(0, str(ROOT / "admin"))
-    import keygen
+    import make_code
     monkeypatch.setenv("CHENGJI_LICENSE_ENFORCE", "1")
     monkeypatch.setenv("CHENGJI_LICENSE_DIR", str(tmp_path / "lic"))
     monkeypatch.setenv("CHENGJI_MACHINE_RAW", "ui-test-machine")
     monkeypatch.setattr(impl, "_MACHINE", None)
-    monkeypatch.setattr(keygen, "LOG_FILE", tmp_path / "记录.csv")
     impl.status()                                                   # 开始试用
     for d in impl._dirs():                                          # 把“第一次使用”挪到 4 天前
         st = impl._unseal((d / "state.json").read_text()); st["first"] -= 4 * 86400
@@ -141,7 +140,7 @@ def test_trial_expired_then_activate(app, page, tmp_path, monkeypatch):
     assert "申请激活码请联系" in page.inner_text("#mask .contactBox")
     page.fill("#code", "AAAAA-BBBBB"); page.click("#actBtn")
     page.wait_for_function("document.querySelector('#actErr').textContent.length > 0")
-    code = keygen.make_code(impl.machine_code(), dt.date.today() + dt.timedelta(days=365))
+    code = make_code.make(impl.machine_code(), dt.date.today() + dt.timedelta(days=365))
     page.fill("#code", code); page.click("#actBtn")
     page.wait_for_function("!document.querySelector('#mask').classList.contains('on')")
     assert page.inner_text("#licText") == "已激活" and not page.is_visible("#export .lock")
