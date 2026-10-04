@@ -28,4 +28,5 @@ __pycache__/
 venv/
 
 自检结果.json
+更新日志.txt
 .DS_Store

@@ -321,6 +321,8 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
 /* 小对话框、欢迎页 */
 #dlg .modal{width:440px} #dlg .inp{margin-top:14px}
 .welcome .modal{width:540px;text-align:center;padding:42px 46px 34px}
+#upd .modal{width:500px} .updNotes{max-height:210px;overflow:auto;background:var(--sunken);border-radius:10px;padding:12px 14px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;margin:14px 0 4px}
+.updBar{height:6px;background:var(--sunken);border-radius:3px;overflow:hidden;margin:14px 0 4px}.updBar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
 .welcome .mark{width:58px;height:58px;border-radius:17px;font-size:29px;margin:0 auto 18px}
 .welcome h2{font-size:24px} .welcome .field{text-align:left;margin-top:24px}
 .contact{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:6px 6px 6px 12px;border-radius:9px;background:var(--gold-soft);color:var(--ink);font-size:13.5px;font-weight:600}
@@ -467,11 +469,12 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
         <div class="eyebrow" id="eMeta">导出</div>
         <h1>把结果带走</h1>
         <p class="sub" style="margin-bottom:24px">Excel 带公式，改参数自动重算；PDF 适合直接发到教师群。</p>
+        <div class="cmpbar hide" id="expCmpRow"><span class="count">和上次比</span><select id="expCmp"></select><span class="count" id="expCmpTip"></span></div>
         <div class="exp">
           <div class="card pad">
             <div class="xico x">XLSX</div>
             <h2>统计表（Excel）</h2>
-            <div class="ul"><div>各班统计 · 班级结构分 · 教师排名</div><div>成绩明细（级名次、班名次、动态序号）</div><div>分数段 · 临界生名单 · 参数设置</div></div>
+            <div class="ul"><div>各班统计 · 班级结构分 · 教师排名</div><div>成绩明细（级名次、班名次、动态序号）</div><div>分数段 · 临界生名单 · 参数设置</div><div id="xlsCmpLine" class="hide">和上次比 · 名次进退 · 上次临界生</div></div>
             <button class="btn pri lg" id="xlsBtn">导出 Excel</button>
             <div class="xdone" id="xlsDone"><b></b><button class="btn sec" data-f="0">打开文件</button><button class="btn sec" data-f="1">打开文件夹</button></div>
           </div>
@@ -589,7 +592,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
       <p><b>分寸 · 成绩核算</b>　版本 <span id="aboutVer"></span></p>
       <p>登分表、任课总表、设置和算出来的结果，都只保存在这台电脑上的这个文件夹里：<b id="aboutRoot" style="word-break:break-all"></b></p>
       <div class="row" style="margin-top:12px"><button class="btn sec" onclick="call('open_root')">打开数据文件夹</button><button class="btn sec" id="updBtn">检查新版本</button><span class="count" id="updMsg"></span></div>
-      <p class="count" style="margin-top:8px">平时不联网。只有点“检查新版本”时才会上网查一下版本号，不上传任何内容。</p>
+      <p class="count" style="margin-top:8px">打开程序时会到 GitHub 上本项目的发布页查一下有没有新版本；有新版本时，点了“立即更新”才会下载。成绩、名单等数据从不上传。没有网络也能正常使用。</p>
      </div>
     </section>
   </main>
@@ -628,10 +631,20 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
   <h2 id="dlgT"></h2><p class="sub" id="dlgP"></p><input class="inp hide" id="dlgI"><div class="msgerr" id="dlgE"></div>
   <div class="row" style="margin-top:14px"><div class="sp"></div><button class="btn sec" id="dlgNo">取消</button><button class="btn sec hide" id="dlgAlt"></button><button class="btn pri" id="dlgOk">确定</button></div>
 </div></div>
+<div class="mask" id="upd"><div class="modal">
+  <div class="eyebrow">新版本</div>
+  <h2>分寸有新版本了</h2>
+  <p class="sub" id="updP"></p>
+  <div class="updNotes" id="updNotes"></div>
+  <div class="updBar hide" id="updBar"><i></i></div>
+  <div class="msgerr" id="updErr"></div>
+  <p class="count" id="updTip" style="margin-top:8px">点“立即更新”会自动下载、换上新版本并重新打开。成绩、设置、任课总表和激活状态都不受影响。</p>
+  <div class="row" style="margin-top:16px"><button class="btn ghost" id="updPage" style="padding:0">打开下载页</button><div class="sp"></div><button class="btn sec" id="updLater">以后再说</button><button class="btn pri" id="updGo">立即更新</button></div>
+</div></div>
 <div class="mask welcome" id="welcome"><div class="modal">
   <div class="mark"><svg viewBox="0 0 200 200"><rect x="48" y="112" width="24" height="40" rx="5" fill="currentColor" opacity=".55"/><rect x="88" y="86" width="24" height="66" rx="5" fill="currentColor" opacity=".8"/><rect x="128" y="52" width="24" height="100" rx="5" fill="#C9A25B"/><rect x="44" y="162" width="112" height="4" rx="2" fill="currentColor" opacity=".35"/></svg></div>
   <h2>欢迎使用分寸</h2>
-  <p class="sub" style="margin-top:8px">把登分表拖进来，几秒钟算出各班统计、班级结构分、教师排名。<br>成绩只保存在这台电脑上，不联网。</p>
+  <p class="sub" style="margin-top:8px">把登分表拖进来，几秒钟算出各班统计、班级结构分、教师排名。<br>成绩只保存在这台电脑上，不会上传。</p>
   <div class="field"><label>学校名称 <span style="font-weight:400;color:var(--faint)">（印在导出的结果上，以后可以在“设置”里改）</span></label><input class="inp" id="wSchool" placeholder="如：××县××中学"></div>
   <div class="row" style="margin-top:24px"><button class="btn ghost" id="wSkip" style="padding:0">以后再填</button><div class="sp"></div><button class="btn pri lg" id="wOk">开始使用</button></div>
 </div></div>
@@ -911,9 +924,22 @@ function renderResult(){
   setupCompare();
 
   // 导出页
-  const tips = {"成绩通报": "总体情况、综合排名、主要结论", "各科得分": "各班各科得分", "各科明细": "平均分、及格率、优秀率", "班级结构分": "各项得分与名次", "分数段": "仅供参考", "前N名": "各班人数分布", "教师排名": "同学科内排名", "临界生名单": "含学生姓名，仅限教师"};
-  $("#pdfList").innerHTML = D.sections.map(k => `<label class="ck"><input type="checkbox" value="${esc(k)}" ${(ST.pdfDefaults[k] ?? true) ? "checked" : ""}>${CK}<b>${esc(k)}</b><span>${tips[k] || ""}</span></label>`).join("");
+  const tips = {"成绩通报": "总体情况、综合排名、主要结论", "各科得分": "各班各科得分", "各科明细": "平均分、及格率、优秀率", "班级结构分": "各项得分与名次", "分数段": "仅供参考", "前N名": "各班人数分布", "教师排名": "同学科内排名", "临界生名单": "含学生姓名，仅限教师", "和上次比": "各班、各科、学生名次的变化，含学生姓名"};
+  const others = sameGrade(D);
+  $("#pdfList").innerHTML = [...D.sections, ...(others.length ? ["和上次比"] : [])].map(k => `<label class="ck"><input type="checkbox" value="${esc(k)}" ${(ST.pdfDefaults[k] ?? k !== "和上次比") ? "checked" : ""}>${CK}<b>${esc(k)}</b><span>${tips[k] || ""}</span></label>`).join("");
+  $("#expCmpRow").classList.toggle("hide", !others.length);
+  $("#expCmp").innerHTML = `<option value="">不加对比</option>` + others.map(r => `<option value="${esc(r.name)}">${esc(r.name)}${r.date ? "（" + esc(r.date) + "）" : ""}</option>`).join("");
+  $("#expCmp").value = others.length ? others[0].name : ""; paintExpCmp();
 }
+// 导出页的“和上次比”：选了哪一次，Excel 就多三张对比表，PDF 里的“和上次比”才能勾
+const sameGrade = D => (ST ? ST.recent : []).filter(r => r.grade === D.grade && r.name !== D.exam);
+function paintExpCmp(){
+  const v = $("#expCmp").value, ck = $('#pdfList input[value="和上次比"]');
+  $("#xlsCmpLine").classList.toggle("hide", !v);
+  $("#expCmpTip").textContent = v ? "Excel 里会多“和上次比”“名次进退”“上次临界生”三张表；PDF 里可以勾选“和上次比”。" : "不加对比：Excel 和 PDF 里都不放两次考试的比较。";
+  if (ck) { ck.disabled = !v; if (!v) ck.checked = false; ck.closest("label").style.opacity = v ? "" : ".45"; }
+}
+$("#expCmp").onchange = paintExpCmp;
 // ---------- 班级详情
 const gradeOf = (D, s, k) => { const n = D.classes.reduce((a, c) => a + c.n, 0); return D.classes.reduce((a, c) => a + c.subj[s][k] * c.n, 0) / n; };   // 全年级的平均分 / 及格率 / 优秀率
 const rankIn = (arr, v) => 1 + arr.filter(x => x > v + 1e-9).length;
@@ -951,7 +977,7 @@ function setupCompare(){
   $("#cpEmpty").classList.toggle("hide", others.length > 0); $("#cpBody").classList.toggle("hide", !others.length);
   if (!others.length) return;
   $("#cpSel").innerHTML = others.map(r => `<option value="${esc(r.name)}">${esc(r.name)}${r.date ? "（" + esc(r.date) + "）" : ""}</option>`).join("");
-  $("#cpSel").onchange = () => drawCompare($("#cpSel").value);
+  $("#cpSel").onchange = () => { drawCompare($("#cpSel").value); $("#expCmp").value = $("#cpSel").value; paintExpCmp(); };
   drawCompare(others[0].name);
 }
 async function drawCompare(name){
@@ -1023,9 +1049,9 @@ async function doExport(name, body, label){
   catch (e) { if (e.license) { paintLicense(await post("state").then(s => s.license)); openAct(); } else toast(e.message, 5200); }
   idle();
 }
-$("#xlsBtn").onclick = () => doExport("export_excel", {}, " Excel");
-$("#pdfBtn").onclick = () => doExport("export_pdf", {sections: $$("#pdfList input:checked").map(i => i.value)}, " PDF");
-$("#allBtn").onclick = () => $$("#pdfList input").forEach(i => i.checked = true);
+$("#xlsBtn").onclick = () => doExport("export_excel", {compare: $("#expCmp").value}, " Excel");
+$("#pdfBtn").onclick = () => doExport("export_pdf", {sections: $$("#pdfList input:checked:not(:disabled)").map(i => i.value), compare: $("#expCmp").value}, " PDF");
+$("#allBtn").onclick = () => $$("#pdfList input:not(:disabled)").forEach(i => i.checked = true);
 
 // ---------- 设置
 function setDirty(v){ dirty = v; $("#savebar").classList.toggle("on", v); if (!v) $("#saveErr").textContent = ""; }
@@ -1125,11 +1151,44 @@ $("#tEdit").onclick = openTed;
 
 // ---------- 帮助
 $$(".toc a").forEach(a => a.onclick = () => { const e = $("#" + a.dataset.h); $(".main").scrollTo({top: e.offsetTop - 16, behavior: "smooth"}); });
-$("#updBtn").onclick = async () => { $("#updMsg").textContent = "正在检查…";
-  try { const r = await post("check_update");
-    if (r.newer) { $("#updMsg").innerHTML = `有新版本 <b>${esc(r.latest)}</b>（现在是 ${esc(r.current)}）　<a id="updGo" style="color:var(--accent);font-weight:600;cursor:pointer">去下载 →</a>`; $("#updGo").onclick = () => call("open_releases"); }
-    else $("#updMsg").textContent = r.latest ? `已经是最新版本（${r.current}）` : `现在是 ${r.current}，还没有查到更新的版本`; }
-  catch (e) { $("#updMsg").innerHTML = `${esc(e.message)}　<a id="updGo" style="color:var(--accent);font-weight:600;cursor:pointer">打开下载页</a>`; $("#updGo").onclick = () => call("open_releases"); } };
+// ---------- 新版本：打开时查一次，帮助页里可以手动查；有新版本时一键下载、替换、重新打开
+async function checkUpdate(manual){
+  const msg = t => { if (manual) $("#updMsg").innerHTML = t; };
+  msg("正在检查…");
+  let r; try { r = await post("update_check"); } catch (e) { msg(esc(e.message)); return; }
+  if (!r.ok) { msg(`${esc(r.reason)}　<a id="updLink" style="color:var(--accent);font-weight:600;cursor:pointer">打开下载页</a>`); if (manual) $("#updLink").onclick = () => call("open_releases"); return; }
+  if (!r.newer) { msg(`已经是最新版本（${esc(r.current)}）`); return; }
+  msg(`有新版本 <b>${esc(r.latest)}</b>（现在是 ${esc(r.current)}）`);
+  showUpdate(r);
+}
+function showUpdate(r){
+  $("#updP").textContent = `现在用的是 ${r.current}，最新是 ${r.latest}。`;
+  $("#updNotes").textContent = r.notes || "这次更新的内容见下载页。";
+  $("#updBar").classList.add("hide"); $("#updBar i").style.width = "0";
+  $("#updErr").textContent = r.canAuto ? "" : r.reason;
+  $("#updGo").classList.toggle("hide", !r.canAuto); $("#updGo").disabled = false; $("#updLater").disabled = false;
+  $("#updGo").textContent = "立即更新"; $("#updTip").classList.toggle("hide", !r.canAuto);
+  $("#updTip").textContent = "点“立即更新”会自动下载、换上新版本并重新打开。成绩、设置、任课总表和激活状态都不受影响。";
+  $("#upd").classList.add("on");
+}
+$("#updLater").onclick = () => $("#upd").classList.remove("on");
+$("#updPage").onclick = () => call("open_releases");
+$("#updGo").onclick = async () => {
+  $("#updGo").disabled = $("#updLater").disabled = true; $("#updErr").textContent = "";
+  $("#updBar").classList.remove("hide"); $("#updTip").textContent = "正在下载新版本…";
+  const fail = m => { $("#updErr").textContent = m; $("#updGo").disabled = $("#updLater").disabled = false; $("#updGo").textContent = "重试"; $("#updTip").textContent = "也可以点左边的“打开下载页”手动下载。"; };
+  try { await post("update_start"); } catch (e) { fail(e.message); return; }
+  for (;;) {
+    await new Promise(res => setTimeout(res, 400));
+    let st; try { st = await post("update_status"); } catch (e) { fail(e.message); return; }
+    $("#updBar i").style.width = st.percent + "%";
+    if (st.phase === "error") { fail(st.error); return; }
+    if (st.phase === "ready") break;
+  }
+  $("#updTip").textContent = "下载好了，正在换上新版本。程序会关闭，几秒钟后自动重新打开…";
+  try { await post("update_apply"); } catch (e) { fail(e.message); }
+};
+$("#updBtn").onclick = () => checkUpdate(true);
 
 // 鼠标停在这些词上会显示解释
 const TIP = {"实考人数": "各科成绩齐全、计入统计的学生", "应考": "应该参加考试的在籍学生；没填就按实考人数算", "实考": "各科成绩齐全、计入统计的学生",
@@ -1147,7 +1206,7 @@ $("#tOpen").onclick = async () => { const r = await call("teacher_open"); if (r)
 $("#tPick").onclick = () => $("#tFile").click();
 $("#tFile").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; busy("正在导入任课总表…"); try { paintTeacher(await post("teacher_upload", f, "?name=" + encodeURIComponent(f.name))); toast("任课总表已导入"); } catch (err) { toast(err.message, 5200); } idle(); };
 
-refresh().catch(e => toast(e.message));
+refresh().then(() => { if (ST.autoUpdate && !$("#welcome").classList.contains("on")) setTimeout(() => checkUpdate(false), 1200); }).catch(e => toast(e.message));
 setInterval(() => post("ping").catch(() => {}), 5000);
 </script>
 </body>

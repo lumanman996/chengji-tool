@@ -1,4 +1,5 @@
 """核对：Excel 公式算出的结果 与 pandas 独立计算的结果 必须一致。
+verify_compare() 另外核对“和上次比”的三张表（tests/verify_all.py 里调用）。
 
 需要 LibreOffice 先把公式算出来（重算后另存），用法：
   python tests/verify_excel.py <登分表.xlsx> <已重算的统计表.xlsx> [--任课 data/任课总表.xlsx]
@@ -100,6 +101,86 @@ def verify(score_path, xlsx_path, teacher_path=None, scheme="平时", ratio=None
             n += 1
             if r[7 + NS] != m["薄弱学科"]:
                 errs.append(f"{r[1]} 薄弱学科 Excel={r[7 + NS]} pandas={m['薄弱学科']}")
+    return n, errs
+
+
+def verify_compare(xlsx_path, R, C):
+    """“和上次比”三张表：本次的公式结果要和 compare.build 用 pandas 结果算出来的一致；上次的固定值原样写入。"""
+    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
+    errs, n = [], 0
+
+    def eq(a, b, what):
+        nonlocal n
+        n += 1
+        if a is None or isinstance(a, str) or abs(float(a) - float(b)) > 1e-6:
+            errs.append(f"{what}: Excel={a} pandas={b}")
+
+    def same(a, b, what):
+        nonlocal n
+        n += 1
+        if a != b:
+            errs.append(f"{what}: Excel={a} 应为={b}")
+
+    ws = wb["和上次比"]
+    rows = list(ws.iter_rows(values_only=True))
+    hdr = {r[0]: i for i, r in enumerate(rows) if r[0] in ("班级", "科目")}
+    col = lambda h: {v: j for j, v in enumerate(rows[hdr[h]]) if v}
+    # 各班
+    cc = col("班级")
+    for i, x in enumerate(C["classes"]):
+        r = rows[hdr["班级"] + 1 + i]
+        same(r[0], x["name"], f"第{i + 1}个班")
+        eq(r[cc["本次综合名次"]], R.class_rank[x["name"]], f"{x['name']} 本次综合名次")
+        eq(r[cc["本次上线率"]], R.online[x["name"]]["上线率"], f"{x['name']} 本次上线率")
+        if C["hasStructure"]:
+            eq(r[cc["本次结构分"]], R.structure[x["name"]]["结构分"], f"{x['name']} 本次结构分")
+            eq(r[cc["本次结构分名次"]], R.structure[x["name"]]["名次"], f"{x['name']} 本次结构分名次")
+        if x["found"]:
+            eq(r[cc["上次综合名次"]], x["prevRank"], f"{x['name']} 上次综合名次")
+            eq(r[cc["本次综合名次"] + 1], x["prevRank"] - R.class_rank[x["name"]], f"{x['name']} 综合名次进退")
+            eq(r[cc["本次上线率"] + 1], R.online[x["name"]]["上线率"] - x["prevOnlineRate"], f"{x['name']} 上线率变化")
+            if C["hasStructure"]:
+                eq(r[cc["本次结构分"] + 1], R.structure[x["name"]]["结构分"] - x["prevStruct"], f"{x['name']} 结构分变化")
+                eq(r[cc["本次结构分名次"] + 1], x["prevStructRank"] - R.structure[x["name"]]["名次"], f"{x['name']} 结构分名次进退")
+    # 各科
+    sc = col("科目")
+    g = R.class_stats["全年级"]
+    for i, x in enumerate(C["subjects"]):
+        r, s = rows[hdr["科目"] + 1 + i], x["subject"]
+        same(r[0], s, f"第{i + 1}个科目")
+        eq(r[sc["本次满分"]], R.cfg.full[s], f"{s} 本次满分")
+        eq(r[sc["本次平均分"]], g[s]["平均分"], f"{s} 本次平均分")
+        eq(r[sc["本次得分率"]], g[s]["平均分"] / R.cfg.full[s], f"{s} 本次得分率")
+        eq(r[sc["本次得分率"] + 1], x["avgRate"] - x["prevAvgRate"], f"{s} 得分率变化")
+        eq(r[sc["上次得分率"]], x["prevAvgRate"], f"{s} 上次得分率")
+        eq(r[sc["本次及格率"]], g[s]["及格率"], f"{s} 本次及格率")
+        eq(r[sc["本次及格率"] + 1], g[s]["及格率"] - x["prevPass"], f"{s} 及格率变化")
+        eq(r[sc["本次优秀率"]], g[s]["优秀率"], f"{s} 本次优秀率")
+        eq(r[sc["本次优秀率"] + 1], g[s]["优秀率"] - x["prevExc"], f"{s} 优秀率变化")
+    for r in rows:
+        if r[0] in ("上次线下临界生", "上次线上临界生"):
+            t = C["nearUp"] if r[0] == "上次线下临界生" else C["nearDown"]
+            eq(r[1], t["all"], f"{r[0]} 人数"); eq(r[2], t["found"], f"{r[0]} 能对上"); eq(r[4], t["moved"], f"{r[0]} {r[3]}")
+    # 名次进退：每个人都按“班级 + 姓名”在 pandas 结果里找
+    df = {(r.班级, r.姓名): {"总分": r.总分, "级名次": r.级名次} for r in R.df.itertuples(index=False)}   # 重名的不在对比名单里
+    m = [r for r in wb["名次进退"].iter_rows(min_row=4, values_only=True) if r[0]]
+    eq(len(m), len(C["students"]), "名次进退 人数")
+    for r, x in zip(m, C["students"]):
+        who = f"{r[0]}{r[1]}"
+        same((r[0], r[1]), (x["cls"], x["name"]), f"名次进退 {who} 的位置")
+        eq(r[3], df[(r[0], r[1])]["总分"], f"{who} 本次总分")
+        eq(r[5], df[(r[0], r[1])]["级名次"], f"{who} 本次级名次")
+        eq(r[6], x["prevRank"] - df[(r[0], r[1])]["级名次"], f"{who} 进退")
+    # 上次临界生
+    q = [r for r in wb["上次临界生"].iter_rows(min_row=4, values_only=True) if r[0]]
+    eq(len(q), len(C["near"]), "上次临界生 人数")
+    for r, x in zip(q, C["near"]):
+        who = f"{r[0]}{r[1]}"
+        same((r[0], r[1], r[2]), (x["cls"], x["name"], x["prevPos"]), f"上次临界生 {who}")
+        if x["found"]:
+            eq(r[4], df[(r[0], r[1])]["总分"], f"{who} 本次总分")
+            same(r[5], "线上" if df[(r[0], r[1])]["总分"] >= R.cut else "线下", f"{who} 本次位置")
+        same(r[6], x["where"], f"{who} 去向")
     return n, errs
 
 

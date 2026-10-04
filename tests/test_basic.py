@@ -173,7 +173,8 @@ def test_service_enrolment_notes():
 
 def test_pdf_sections_parse():
     from chengji.cli import parse_sections
-    from chengji.pdf_report import SECTIONS
+    from chengji.pdf_report import COMPARE, SECTIONS
+    SECTIONS = [s for s in SECTIONS if s != COMPARE]              # 命令行里没有“和上次比”
     avail = [s for s in SECTIONS if s != "教师排名"]              # 假设本次没有任课教师
     assert parse_sections("1 4", avail, SECTIONS) == ["成绩通报", "班级结构分"]
     assert parse_sections("结构分、成绩通报", avail, SECTIONS) == ["成绩通报", "班级结构分"]   # 按页面顺序
@@ -386,3 +387,73 @@ def test_friendly_path(tmp_path):
     out.mkdir(parents=True)
     assert friendly_path(out, home) == str(out)                    # 不在个人文件夹里（如 D 盘）：原样显示
     assert "somebody" not in friendly_path(home / "Documents" / "分寸成绩核算", home)
+
+
+# ---------------- 和上次比（导出用的对比数据）
+def _run_view(path, exam, scheme="平时"):
+    from chengji import service as sv
+    R, c, m = sv.compute(path, SCHOOL, {"scheme": scheme, "exam": exam}, ROOT / "samples" / "示例任课总表.xlsx")
+    return R, sv.to_view(R, c, m)
+
+
+def test_compare_build(tmp_path):
+    """按“班级 + 姓名”对应：改了名、同班重名、换了班的不比；上次的临界生有去向；不同年级不能比。"""
+    from chengji.compare import build
+    src = ROOT / "samples" / "示例登分表_九年级.xlsx"
+    _R0, P = _run_view(src, "上次")
+    wb = openpyxl.load_workbook(src); ws = wb.active
+    ws.cell(3, 3, "改了名字")                                    # 第 1 个学生：对不上
+    ws.cell(10, 2, "九2")                                        # 换了班：对不上
+    for r in range(3, ws.max_row + 1):                           # 九1 每人每科多 3 分 → 九1 的学生名次都进步或持平
+        if ws.cell(r, 2).value == "九1":
+            for c in range(5, 12):
+                ws.cell(r, c, min([120, 100, 100, 70, 60, 50, 50][c - 5], ws.cell(r, c).value + 3))
+    f = tmp_path / "本次.xlsx"; wb.save(f)
+    R1, _V = _run_view(f, "本次")
+    C = build(R1, P)
+    keys = {(x["cls"], x["name"]) for x in C["students"]}
+    assert ("九1", "改了名字") not in keys and len(C["students"]) == len(P["students"]) - 2 - 2   # 改名、换班，加上本来就有的一组同班重名
+    assert all(x["change"] >= 0 for x in C["students"] if x["cls"] == "九1")
+    assert C["students"][0]["change"] == max(x["change"] for x in C["students"])           # 进步最多的排在前面
+    x = next(x for x in C["classes"] if x["name"] == "九1")
+    assert x["found"] and x["prevRank"] == next(c["rank"] for c in P["classes"] if c["name"] == "九1")
+    assert len(C["subjects"]) == 7 and abs(C["subjects"][0]["prevAvgRate"] - C["subjects"][0]["prevAvg"] / 120) < 1e-12
+    assert C["nearUp"]["all"] == sum(1 for n in P["near"] if n["pos"] == "线下")
+    assert {n["where"] for n in C["near"]} <= {"上线了", "仍在线下", "掉到线下", "仍在线上", "这次没有对上"}
+    with pytest.raises(ValueError, match="同一个年级"):
+        build(R1, {**P, "grade": "七年级"})
+
+
+def test_compare_in_excel_and_pdf(tmp_path):
+    """选了和哪一次比，Excel 多三张表、PDF 多两页；没选就和原来一样。"""
+    from chengji import service as sv
+    from chengji.pdf_report import available_sections, build_html
+    src = ROOT / "samples" / "示例登分表_九年级.xlsx"
+    R0, P = _run_view(src, "上次")
+    sv.save_run(tmp_path, src, {"scheme": "平时"}, P)
+    R1, _V = _run_view(src, "本次", "中考")
+    with pytest.raises(ValueError, match="不能和自己比"):
+        sv.compare_with(R0, tmp_path, "上次")
+    C = sv.compare_with(R1, tmp_path, "上次")
+    names = openpyxl.load_workbook(sv.export_excel(R1, [], tmp_path, C)).sheetnames
+    assert {"和上次比", "名次进退", "上次临界生"} <= set(names)
+    assert "和上次比" not in openpyxl.load_workbook(sv.export_excel(R1, [], tmp_path)).sheetnames
+    assert "和上次比" not in available_sections(R1) and available_sections(R1, True)[-1] == "和上次比"
+    html = build_html(R1, [], ["成绩通报", "和上次比"], C)
+    assert html.count('<div class="page">') == 3 and "和上次考试比较（一）" in html and "进步最多的学生" in html
+    assert "临界生名单" not in html.split("和上次考试比较")[0]                # 没选临界生名单，就没有那一页
+    assert "和上次考试比较" not in build_html(R1, [], ["成绩通报"], C)
+    with pytest.raises(ValueError, match="和哪一次"):
+        sv.export_pdf(R1, [], ["和上次比"], tmp_path, None)
+
+
+def test_compare_export_needs_license(tmp_path, monkeypatch):
+    """试用到期后，带“和上次比”的导出和别的导出一样被拦住。"""
+    from chengji import license as lic
+    from chengji.server import App
+    monkeypatch.setattr(lic, "status", lambda: {"state": "expired", "canExport": False, "message": "试用已结束，导出需要先激活。"})
+    app = App(tmp_path)
+    with pytest.raises(lic.LicenseError):
+        app.api_export_excel({"compare": "上次"})
+    with pytest.raises(lic.LicenseError):
+        app.api_export_pdf({"sections": ["和上次比"], "compare": "上次"})

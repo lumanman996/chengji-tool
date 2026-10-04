@@ -522,3 +522,70 @@ def test_contact_author_in_help(app, page):
     page.click("#cWechatCopy"); page.wait_for_selector("#toast.on")
     assert "已复制微信号" in page.inner_text("#toast")
     assert page.locator("#help img").count() == 0 and page.locator("#mask img").count() == 0      # 没有二维码
+
+
+def test_update_prompt(app, page, monkeypatch):
+    """打开程序时查到新版本：弹出提示，点“立即更新”就下载、换上新版本、退出（之后由替换脚本重新打开）。"""
+    import os
+    import threading
+    from chengji import updater
+    root, url = app
+    monkeypatch.setenv("CHENGJI_UPDATE_CHECK", "1")
+    info = {"ok": True, "current": "2.0.2", "latest": "9.9.9", "newer": True, "notes": "· 新功能一\n· 新功能二", "page": "",
+            "canAuto": True, "reason": "", "error": "", "asset": {"name": "chengji-tool-v9.9.9-mac.zip"}}
+    monkeypatch.setattr(updater, "check", lambda *a, **k: dict(info))
+    calls = []
+    monkeypatch.setattr(updater.Updater, "start", lambda self, asset: (calls.append(("start", asset["name"])), self._set(phase="ready", percent=100)))
+    monkeypatch.setattr(updater.Updater, "apply", lambda self, args=None: calls.append(("apply",)))
+    exited = threading.Event()
+    monkeypatch.setattr(os, "_exit", lambda code: exited.set())                 # 真程序会在这里退出
+    page.goto(url)
+    page.wait_for_selector("#upd.on", timeout=10000)
+    assert "9.9.9" in page.inner_text("#updP") and "新功能一" in page.inner_text("#updNotes")
+    page.click("#updGo")
+    page.wait_for_function("document.querySelector('#updTip').textContent.includes('重新打开')")
+    assert exited.wait(5) and calls == [("start", "chengji-tool-v9.9.9-mac.zip"), ("apply",)]
+    # 不能一键更新时（比如没有写入权限）：说明原因，只给“打开下载页”
+    info.update(canAuto=False, reason="程序所在的文件夹不允许修改")
+    page.goto(url); page.wait_for_selector("#upd.on", timeout=10000)
+    assert not page.is_visible("#updGo") and "不允许修改" in page.inner_text("#updErr")
+    page.click("#updLater"); assert not page.is_visible("#upd")
+    # 帮助页手动检查：已经是最新
+    info.update(newer=False, latest="2.0.2")
+    page.evaluate("go('help')"); page.click("#updBtn")
+    page.wait_for_function("document.querySelector('#updMsg').textContent.includes('已经是最新')")
+
+
+def test_no_update_check_by_default(app, page, monkeypatch):
+    """源码运行（开发、测试）时打开程序不联网检查。"""
+    from chengji import updater
+    monkeypatch.setattr(updater, "check", lambda *a, **k: pytest.fail("不该检查"))
+    root, url = app
+    page.goto(url); page.wait_for_selector("#recent .li"); page.wait_for_timeout(1800)
+    assert not page.is_visible("#upd")
+
+
+def test_export_with_compare(app, page, tmp_path):
+    """导出页选“和上次比”：Excel 多三张对比表，PDF 里可以勾“和上次比”；选“不加对比”就和原来一样。"""
+    import openpyxl
+    root, url = app
+    import_and_compute(page, url, "示例登分表_九年级.xlsx", "第一次月考")
+    page.wait_for_selector("#resBody:not(.hide)")
+    page.goto(url); page.wait_for_selector("#recent .li")
+    page.set_input_files("#file", str(_second_exam(tmp_path))); page.wait_for_selector("#wizBody:not(.hide)")
+    page.fill("#exam", "期中考试"); page.click("#run"); page.wait_for_selector("#resBody:not(.hide)")
+    page.evaluate("go('export')")
+    assert page.is_visible("#expCmpRow") and page.input_value("#expCmp") == "第一次月考"
+    ck = page.locator('#pdfList input[value="和上次比"]')
+    assert ck.count() == 1 and not ck.is_checked()                  # 含学生姓名，默认不勾
+    page.click("#xlsBtn"); idle(page)
+    x = root / "output" / "期中考试" / "期中考试_各班综合统计.xlsx"
+    assert {"和上次比", "名次进退", "上次临界生"} <= set(openpyxl.load_workbook(x).sheetnames)
+    page.click('#pdfList label:has(input[value="和上次比"])'); assert ck.is_checked()
+    page.click("#pdfBtn"); idle(page)
+    if "已导出" in page.inner_text("#pdfDone"):                       # 电脑上没有浏览器时不生成 PDF
+        assert (root / "output" / "期中考试" / "期中考试_成绩发布版.pdf").stat().st_size > 20000
+    page.select_option("#expCmp", "")
+    assert ck.is_disabled() and not ck.is_checked()
+    page.click("#xlsBtn"); idle(page)
+    assert "和上次比" not in openpyxl.load_workbook(x).sheetnames

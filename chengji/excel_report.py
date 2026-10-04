@@ -1,6 +1,7 @@
 """生成统计用 Excel（带公式，改参数后在 Excel/WPS 中自动重算）。
 
-表：各班统计、班级结构分、教师排名、前85%分数段、临界生名单、参数设置、成绩明细、任课安排
+表：各班统计、班级结构分、教师排名、前85%分数段、临界生名单、参数设置、成绩明细、任课安排；
+选了“和上次比”时再加：和上次比、名次进退、上次临界生（上次的数字是当时的结果，本次的数字是公式）。
 """
 from __future__ import annotations
 
@@ -41,7 +42,7 @@ def note(ws, r, text, ncol, size=10):
     ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncol)
 
 
-def build_excel(R: Result, path, conclusions: list[str]):
+def build_excel(R: Result, path, conclusions: list[str], compare: dict | None = None):
     cfg = R.cfg
     SUBS, NS, CL = cfg.subjects, len(cfg.subjects), R.classes
     nc = len(CL)
@@ -412,8 +413,12 @@ def build_excel(R: Result, path, conclusions: list[str]):
             row = lastr + 2
         for col, w in zip("ABCDEFGHIJ", [7, 10, 20, 9, 9, 9, 9, 9, 10, 11]):
             e.column_dimensions[col].width = w
+    sl = None
     if W:      # 结构分单独一张表，不放进「各班统计」（用户明确要求两张表分开）
-        _structure_sheet(wb, R, P, rng, cls, tot, SC, NS, TC, rT)
+        sl = _structure_sheet(wb, R, P, rng, cls, tot, SC, NS, TC, rT)
+    if compare:
+        _compare_sheets(wb, R, compare, {"rng": rng, "cls": cls, "tot": tot, "name": rng("C"), "rank": rng(L(6 + NS)),
+                                         "PR": PR, "cC": cC, "t2": t2, "pp": pp, "struct": sl})
     wb.save(path)
     return path
 
@@ -547,3 +552,151 @@ def _structure_sheet(wb, R: Result, P, rng, cls, tot, SC, NS, TC, rT):
     ws.row_dimensions[3].height = 22
     ws.row_dimensions[4].height = 30
     ws.freeze_panes = "B5"
+    return letter
+
+
+UP_DOWN = '"↑"0;"↓"0;"持平"'          # 名次进退：正数是进步
+DIFF2, DIFFP = "+0.00;-0.00;0.00", "+0.0%;-0.0%;0.0%"
+
+
+def _heads(ws, r, heads, widths=None):
+    for j, h in enumerate(heads, 1):
+        sty(ws.cell(r, j, h), True, HEAD)
+    for j, w in enumerate(widths or [], 1):
+        ws.column_dimensions[L(j)].width = w
+
+
+def _put(ws, r, j, v, fmt=None, bold=False, fill=None, color="000000"):
+    c = ws.cell(r, j, v)
+    sty(c, bold, fill, color)
+    if fmt:
+        c.number_format = fmt
+    return c
+
+
+def _compare_sheets(wb, R: Result, C: dict, ref: dict):
+    """和上次比：上次的数字写成固定值（当时算好的结果），本次的数字用公式取自本工作簿的其他表。"""
+    cfg, CL = R.cfg, R.classes
+    nc, pv = len(CL), C["prev"]
+    GREY = "808080"
+    pp = ref["pp"]
+    cut_ref = f"'前{pp}分数段'!$B$5"
+    match = lambda sheet, col, r0, r1, key: (f"INDEX({sheet}!${col}${r0}:${col}${r1},"
+                                             f"MATCH({key},{sheet}!$A${r0}:$A${r1},0))")
+    who = f"上次：{pv['exam']}" + (f"（{pv['date']}）" if pv["date"] else "") + f"，{pv['scheme']}方案，实考 {pv['n']} 人，升学线 {pv['cut']:g} 分"
+
+    # ---------- 和上次比：各班、各科、上次临界生汇总
+    ws = wb.create_sheet("和上次比")
+    title(ws, f"{cfg.exam} 和上次考试比较", 13)
+    note(ws, 2, who + "。灰色是上次的结果（固定数字），黑色是本次（公式，随本表其他工作表变化）。“进退”正数为进步。", 13)
+    ws.row_dimensions[2].height = 30
+    ws.cell(4, 1, "一、各班").font = Font(name=FONT, size=12, bold=True)
+    heads = ["班级"]
+    if C["hasStructure"]:
+        heads += ["上次结构分", "本次结构分", "变化", "上次结构分名次", "本次结构分名次", "进退"]
+    heads += ["上次综合名次", "本次综合名次", "进退", "上次上线率", "本次上线率", "变化"]
+    _heads(ws, 5, heads, [16] + [11] * 13)
+    ws.row_dimensions[5].height = 30
+    sl = ref["struct"]
+    for i, x in enumerate(C["classes"]):
+        r, j = 6 + i, 1
+        _put(ws, r, 1, x["name"], bold=True)
+        if C["hasStructure"]:
+            cur = match("班级结构分", sl["|结构分"], 5, 4 + nc, f"$A{r}")
+            curk = match("班级结构分", sl["|名次"], 5, 4 + nc, f"$A{r}")
+            f = x["found"] and "prevStruct" in x
+            _put(ws, r, 2, x["prevStruct"] if f else "—", "0.00", color=GREY)
+            _put(ws, r, 3, "=" + cur, "0.00", True)
+            _put(ws, r, 4, f"=C{r}-B{r}" if f else "", DIFF2)
+            _put(ws, r, 5, x["prevStructRank"] if f else "—", "0", color=GREY)
+            _put(ws, r, 6, "=" + curk, "0", True)
+            _put(ws, r, 7, f"=E{r}-F{r}" if f else "", UP_DOWN)
+            j = 7
+        f = x["found"]
+        cur = match("各班统计", L(ref["cC"] + 1), 4, 3 + nc, f"$A{r}")
+        _put(ws, r, j + 1, x["prevRank"] if f else "—", "0", color=GREY)
+        _put(ws, r, j + 2, "=" + cur, "0", True)
+        _put(ws, r, j + 3, f"={L(j + 1)}{r}-{L(j + 2)}{r}" if f else "", UP_DOWN)
+        cur = match(f"'前{pp}分数段'", "D", ref["t2"] + 1, ref["t2"] + nc, f"$A{r}")
+        _put(ws, r, j + 4, x["prevOnlineRate"] if f else "—", "0.0%", color=GREY)
+        _put(ws, r, j + 5, "=" + cur, "0.0%", True)
+        _put(ws, r, j + 6, f"={L(j + 5)}{r}-{L(j + 4)}{r}" if f else "上次没有这个班", DIFFP)
+    r = 6 + nc + 1
+    ws.cell(r, 1, "二、各科（全年级）").font = Font(name=FONT, size=12, bold=True)
+    note(ws, r + 1, "两次考试的满分可能不同，所以平均分比“得分率”（平均分 ÷ 满分）。“变化”是百分点。", 13)
+    h0 = r + 2
+    _heads(ws, h0, ["科目", "上次满分", "本次满分", "上次平均分", "本次平均分", "上次得分率", "本次得分率", "变化",
+                    "上次及格率", "本次及格率", "变化", "上次优秀率", "本次优秀率", "变化"])
+    ws.row_dimensions[h0].height = 30
+    grow = 4 + nc                                            # 各班统计里“全年级”那一行
+    for k, x in enumerate(C["subjects"]):
+        r = h0 + 1 + k
+        c0 = 3 + 5 * cfg.subjects.index(x["subject"])
+        _put(ws, r, 1, x["subject"], bold=True)
+        _put(ws, r, 2, x["prevFull"], "0", color=GREY)
+        _put(ws, r, 3, f"=参数设置!$B${ref['PR'][x['subject']]}", "0")
+        _put(ws, r, 4, x["prevAvg"], "0.00", color=GREY)
+        _put(ws, r, 5, f"=各班统计!{L(c0 + 1)}{grow}", "0.00")
+        _put(ws, r, 6, f"=D{r}/B{r}", "0.0%", color=GREY)
+        _put(ws, r, 7, f"=E{r}/C{r}", "0.0%", True)
+        _put(ws, r, 8, f"=G{r}-F{r}", DIFFP)
+        _put(ws, r, 9, x["prevPass"], "0.0%", color=GREY)
+        _put(ws, r, 10, f"=各班统计!{L(c0 + 2)}{grow}", "0.0%", True)
+        _put(ws, r, 11, f"=J{r}-I{r}", DIFFP)
+        _put(ws, r, 12, x["prevExc"], "0.0%", color=GREY)
+        _put(ws, r, 13, f"=各班统计!{L(c0 + 3)}{grow}", "0.0%", True)
+        _put(ws, r, 14, f"=M{r}-L{r}", DIFFP)
+    if not C["subjects"]:
+        note(ws, h0 + 1, "两次考试没有相同的科目。", 13)
+    r = h0 + 2 + max(len(C["subjects"]), 1)
+    ws.cell(r, 1, "三、上次的临界生，这次怎么样了").font = Font(name=FONT, size=12, bold=True)
+    _heads(ws, r + 1, ["上次", "人数", "这次能对上", "其中", "人数"])
+    end = 3 + max(len(C["near"]), 1)
+    nC, nG = f"上次临界生!$C$4:$C${end}", f"上次临界生!$G$4:$G${end}"
+    for i, (lab, pos, goal) in enumerate([("上次线下临界生", "线下", "上线了"), ("上次线上临界生", "线上", "掉到线下")]):
+        rr = r + 2 + i
+        t = C["nearUp"] if pos == "线下" else C["nearDown"]
+        _put(ws, rr, 1, lab, bold=True)
+        _put(ws, rr, 2, t["all"], "0", color=GREY)
+        _put(ws, rr, 3, f'=COUNTIF({nC},"{pos}")-COUNTIFS({nC},"{pos}",{nG},"这次没有对上")', "0")
+        _put(ws, rr, 4, goal)
+        _put(ws, rr, 5, f'=COUNTIFS({nC},"{pos}",{nG},"{goal}")', "0", True)
+    note(ws, r + 5, "学生按“班级 + 姓名”对应：两次都参加、并且能对上的才比较；换了班、同班重名、缺考的不在比较之内。"
+                    "逐人的情况见「名次进退」「上次临界生」两张表。", 13)
+    ws.row_dimensions[r + 5].height = 30
+    ws.freeze_panes = "B6"
+
+    # ---------- 名次进退：每个能对上的学生
+    m = wb.create_sheet("名次进退")
+    title(m, f"{cfg.exam} 学生级名次进退（和 {pv['exam']} 比）", 7, 14)
+    note(m, 2, "按进步名次从多到少排列，可以用表头的筛选按钮按班级筛选或重新排序。本次总分、名次取自「成绩明细」。", 7)
+    _heads(m, 3, ["班级", "姓名", "上次总分", "本次总分", "上次级名次", "本次级名次", "进退（名）"], [8, 10, 10, 10, 11, 11, 11])
+    look = lambda col, r: f"=SUMIFS({col},{ref['cls']},$A{r},{ref['name']},$B{r})"
+    for i, x in enumerate(C["students"]):
+        r = 4 + i
+        _put(m, r, 1, x["cls"]); _put(m, r, 2, x["name"], bold=True)
+        _put(m, r, 3, x["prevTotal"], None, color=GREY)
+        _put(m, r, 4, look(ref["tot"], r))
+        _put(m, r, 5, x["prevRank"], "0", color=GREY)
+        _put(m, r, 6, look(ref["rank"], r), "0", True)
+        _put(m, r, 7, f"=E{r}-F{r}", UP_DOWN, True)
+    m.freeze_panes = "C4"
+    m.auto_filter.ref = f"A3:G{3 + max(len(C['students']), 1)}"
+
+    # ---------- 上次临界生：逐人的去向
+    q = wb.create_sheet("上次临界生")
+    title(q, f"上次（{pv['exam']}）的临界生，这次怎么样了", 7, 14)
+    note(q, 2, f"本次升学线见「前{pp}分数段」（{R.cut:g} 分），改了升学线比例，“本次位置”“去向”会跟着变。名单含学生姓名，仅限教师使用。", 7)
+    _heads(q, 3, ["班级", "姓名", "上次位置", "上次总分", "本次总分", "本次位置", "去向"], [8, 10, 10, 10, 10, 10, 13])
+    for i, x in enumerate(C["near"]):
+        r = 4 + i
+        _put(q, r, 1, x["cls"]); _put(q, r, 2, x["name"], bold=True)
+        _put(q, r, 3, x["prevPos"], color=GREY); _put(q, r, 4, x["prevTotal"], None, color=GREY)
+        if x["found"]:
+            _put(q, r, 5, look(ref["tot"], r))
+            _put(q, r, 6, f'=IF(E{r}>={cut_ref},"线上","线下")', bold=True)
+            _put(q, r, 7, f'=IF(C{r}="线下",IF(F{r}="线上","上线了","仍在线下"),IF(F{r}="线下","掉到线下","仍在线上"))', bold=True)
+        else:
+            _put(q, r, 5, ""); _put(q, r, 6, "")
+            _put(q, r, 7, "这次没有对上", color=GREY)
+    q.freeze_panes = "C4"

@@ -5,7 +5,7 @@
   compute()   按界面上确认的设置计算，得到 Result
   to_view()   把 Result 整理成界面要显示的数据
   save_run() / list_runs() / load_run()   “最近的考试”
-  export_excel() / export_pdf()   导出
+  export_excel() / export_pdf()   导出（可以带上“和上次比”，见 compare_with()）
 """
 from __future__ import annotations
 
@@ -418,18 +418,28 @@ def load_run(output_root, name: str) -> dict:
 
 
 # ---------------------------------------------------------------- 导出
-def export_excel(R: Result, conclusions: list[str], output_root) -> Path:
+def compare_with(R: Result, output_root, name: str) -> dict:
+    """本次和以前算过的某一次考试比（“和上次比”）。只读，不改动那一次考试。"""
+    from .compare import build
+    if clean_name(name) == R.cfg.exam:
+        raise ValueError("不能和自己比，请选另一次考试。")
+    return build(R, load_run(output_root, name)["view"])
+
+
+def export_excel(R: Result, conclusions: list[str], output_root, compare: dict | None = None) -> Path:
     from .excel_report import build_excel
     out = Path(output_root) / R.cfg.exam
     out.mkdir(parents=True, exist_ok=True)
-    return Path(build_excel(R, out / f"{R.cfg.exam}_各班综合统计.xlsx", conclusions))
+    return Path(build_excel(R, out / f"{R.cfg.exam}_各班综合统计.xlsx", conclusions, compare))
 
 
-def export_pdf(R: Result, conclusions: list[str], sections: list[str], output_root) -> Path:
-    from .pdf_report import available_sections, build_html, html_to_pdf
-    chosen = [k for k in available_sections(R) if k in set(sections)]
+def export_pdf(R: Result, conclusions: list[str], sections: list[str], output_root, compare: dict | None = None) -> Path:
+    from .pdf_report import COMPARE, available_sections, build_html, html_to_pdf
+    if COMPARE in sections and not compare:
+        raise ValueError("勾选了“和上次比”，请先选好和哪一次考试比。")
+    chosen = [k for k in available_sections(R, bool(compare)) if k in set(sections)]
     if not chosen:
         raise ValueError("请至少勾选一项要导出的内容。")
     out = Path(output_root) / R.cfg.exam
     out.mkdir(parents=True, exist_ok=True)
-    return Path(html_to_pdf(build_html(R, conclusions, chosen), out / f"{R.cfg.exam}_成绩发布版.pdf"))
+    return Path(html_to_pdf(build_html(R, conclusions, chosen, compare), out / f"{R.cfg.exam}_成绩发布版.pdf"))

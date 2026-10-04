@@ -1,4 +1,5 @@
-"""总入口：没有参数就打开图形界面；带参数就走命令行（自动测试、批量处理用）。"""
+"""总入口：没有参数就打开图形界面；带参数就走命令行（自动测试、批量处理用）。
+--自检、--apply-update <安装包.zip | online> [--then-selftest]、--检查更新 是打包后自检用的。"""
 from __future__ import annotations
 
 import sys
@@ -38,6 +39,14 @@ def launch(argv=None):
         if argv and argv[0] == "--自检":
             from .gui import selftest
             sys.exit(selftest())
+        if argv and argv[0] == "--apply-update":                # 打包自检：用安装包更新自己，再重新打开
+            from .updater import apply_from_command
+            sys.exit(apply_from_command(argv[1] if len(argv) > 1 else "", ["--自检"] if "--then-selftest" in argv else []))
+        if argv and argv[0] == "--检查更新":                    # 打包自检：联网查一次版本（看证书等是否正常）
+            import json
+            from .updater import check
+            print(json.dumps({k: v for k, v in check().items() if k != "notes"}, ensure_ascii=False), flush=True)
+            sys.exit(0)
         if headless:
             from .cli import run
             return run(argv)
