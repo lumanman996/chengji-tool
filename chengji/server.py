@@ -1,5 +1,6 @@
 """界面背后的本地服务：只在本机（127.0.0.1）上开一个端口，界面通过它调用计算、导出、设置。
-不联网，外面的电脑访问不到；每次启动生成一个随机口令，界面带着口令才能调用。
+外面的电脑访问不到；每次启动生成一个随机口令，界面带着口令才能调用。
+唯一会上网的是检查和下载更新（updater.py，只访问 GitHub 上本项目的发布页）。
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import yaml
 
-from . import CONTACT, REPO, __version__, license as lic
+from . import CONTACT, __version__, license as lic, updater
 from . import service as sv
 from . import teachers as tt
 from .config import load_school, load_teachers
@@ -33,6 +34,13 @@ def newer_version(a: str, b: str) -> bool:
     import re
     ta, tb = [int(x) for x in re.findall(r"\d+", a)], [int(x) for x in re.findall(r"\d+", b)]
     return bool(ta) and ta > tb
+
+
+def auto_update_check() -> bool:
+    """打开程序时要不要查一次新版本：打包好的程序查；源码运行（开发、测试）不查，除非特意打开。"""
+    if os.environ.get("CHENGJI_NO_UPDATE_CHECK"):
+        return False
+    return updater.FROZEN or os.environ.get("CHENGJI_UPDATE_CHECK") == "1"
 
 
 def friendly_path(path: Path, home: Path | None = None) -> str:
@@ -108,6 +116,8 @@ class App:
         self.lock = threading.Lock()
         self.last_ping = time.time()
         self.window = None                # 程序窗口（有它才能弹出系统的“存储”对话框）；浏览器方式下是 None
+        self.updater = updater.Updater()  # 一键更新：下载、替换
+        self.update_info = None
 
     def school(self):
         return load_school(self.config, self.local)
@@ -118,7 +128,7 @@ class App:
         loc = self._local()
         return {"version": __version__, "school": s.name, "nativeDialog": self.window is not None,
                 "firstRun": not loc.get("已引导") and not loc.get("学校") and not sv.list_runs(self.output, 1),
-                "contact": CONTACT, "fontSize": loc.get("界面字号") or "标准", "root": friendly_path(self.root), "hasSample": (self.root / "samples" / SAMPLE[0]).is_file(), "license": lic.status(), "recent": sv.list_runs(self.output),
+                "contact": CONTACT, "autoUpdate": auto_update_check(), "fontSize": loc.get("界面字号") or "标准", "root": friendly_path(self.root), "hasSample": (self.root / "samples" / SAMPLE[0]).is_file(), "license": lic.status(), "recent": sv.list_runs(self.output),
                 "templates": list(s.grade_subjects), "pdfDefaults": s.pdf_sections, "hasTeacherTable": self.teacher.is_file()}
 
     def api_welcome(self, body):
@@ -227,16 +237,23 @@ class App:
         return self.result
 
     # ---------------- 导出
-    def api_export_excel(self, _=None):
+    def _compare(self, R, body):
+        """导出时带上“和上次比”：body 里的 compare 是和哪一次考试比（空 = 不比）。"""
+        name = str((body or {}).get("compare") or "").strip()
+        return sv.compare_with(R, self.output, name) if name else None
+
+    def api_export_excel(self, body=None):
         lic.require_export()
         R, concl, _m = self._ensure_result()
-        path = sv.export_excel(R, concl, self.output)
+        path = sv.export_excel(R, concl, self.output, self._compare(R, body))
         return {"path": str(path), "name": path.name}
 
     def api_export_pdf(self, body):
         lic.require_export()
         R, concl, _m = self._ensure_result()
-        path = sv.export_pdf(R, concl, body.get("sections") or [], self.output)
+        sections = body.get("sections") or []
+        cmp_ = self._compare(R, body) if "和上次比" in sections else None
+        path = sv.export_pdf(R, concl, sections, self.output, cmp_)
         return {"path": str(path), "name": path.name}
 
     def api_open_output(self, body=None):
@@ -377,22 +394,26 @@ class App:
         reveal(self.root)
         return {}
 
-    def api_check_update(self, _=None):
-        """检查有没有新版本。只有使用者点了“检查新版本”才会联网，只读取版本号，不上传任何东西。"""
-        import urllib.error
-        import urllib.request
-        url = f"https://api.github.com/repos/{REPO}/releases/latest"
-        try:
-            req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "fencun"})
-            data = json.loads(urllib.request.urlopen(req, timeout=8).read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return {"current": __version__, "latest": None, "newer": False}
-            raise ValueError("暂时查不到新版本，请稍后再试，或直接打开下载页看看。") from None
-        except Exception:
-            raise ValueError("连不上网络，没法检查。可以稍后再试，或直接打开下载页看看。") from None
-        latest = str(data.get("tag_name") or "").lstrip("vV")
-        return {"current": __version__, "latest": latest, "newer": newer_version(latest, __version__)}
+    def api_update_check(self, _=None):
+        """查有没有新版本（只读 GitHub 上本项目的发布页，不上传任何东西）。打开程序时查一次，帮助页里也能手动查。"""
+        self.update_info = updater.check()
+        return {k: v for k, v in self.update_info.items() if k != "asset"}
+
+    def api_update_start(self, _=None):
+        info = self.update_info
+        if not info or not info.get("newer") or not info.get("canAuto"):
+            raise ValueError((info or {}).get("reason") or "没有可以一键安装的新版本。")
+        self.updater.start(info["asset"])
+        return self.updater.status()
+
+    def api_update_status(self, _=None):
+        return self.updater.status()
+
+    def api_update_apply(self, _=None):
+        """换上新版本并重新打开：先启动替换脚本，再退出本程序。"""
+        self.updater.apply()
+        threading.Timer(0.8, lambda: os._exit(0)).start()   # 留一点时间把这次回应发回界面
+        return {}
 
     def api_open_repo(self, _=None):
         """用系统浏览器打开项目主页（只有使用者点了才会打开）。"""
@@ -404,7 +425,7 @@ class App:
     def api_open_releases(self, _=None):
         if not os.environ.get("CHENGJI_NO_OPEN"):
             import webbrowser
-            webbrowser.open(f"https://github.com/{REPO}/releases/latest")
+            webbrowser.open(updater.RELEASES_PAGE)
         return {}
 
     # ---------------- 许可

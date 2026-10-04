@@ -10,14 +10,16 @@ from .analysis import RATE_ITEMS, Result
 
 
 # 发布版可以选择导出的内容（顺序即页面顺序）。右边是页面标题里用来认出这一页的字样。
-SECTIONS = ["成绩通报", "各科得分", "各科明细", "班级结构分", "分数段", "前N名", "教师排名", "临界生名单"]
-_TITLE_KEY = [("成绩通报", "成绩通报"), ("各科得分", "各科得分"), ("各科明细", "各科明细"), ("班级结构分", "班级结构分"),
+COMPARE = "和上次比"        # 只有选了和哪一次考试比，才有这一项
+SECTIONS = ["成绩通报", "各科得分", "各科明细", "班级结构分", "分数段", "前N名", "教师排名", "临界生名单", COMPARE]
+_TITLE_KEY = [("和上次", COMPARE), ("成绩通报", "成绩通报"), ("各科得分", "各科得分"), ("各科明细", "各科明细"), ("班级结构分", "班级结构分"),
               ("前N名", "前N名"), ("分数段", "分数段"), ("教师", "教师排名"), ("临界生", "临界生名单")]
 
 
-def available_sections(R: Result) -> list[str]:
-    """本次考试实际有的内容（没有任课教师就没有教师排名，没有结构分方案就没有结构分）。"""
-    return [k for k in SECTIONS if not (k == "班级结构分" and not R.structure) and not (k == "教师排名" and not R.teachers)]
+def available_sections(R: Result, has_compare: bool = False) -> list[str]:
+    """本次考试实际有的内容（没有任课教师就没有教师排名，没有结构分方案就没有结构分，没选对比就没有“和上次比”）。"""
+    return [k for k in SECTIONS if not (k == "班级结构分" and not R.structure) and not (k == "教师排名" and not R.teachers)
+            and not (k == COMPARE and not has_compare)]
 
 
 def _mark(vals, v):
@@ -26,8 +28,8 @@ def _mark(vals, v):
     return ' class="best"' if v == max(vals) else (' class="worst"' if v == min(vals) else "")
 
 
-def build_html(R: Result, conclusions: list[str], sections: list[str] | None = None) -> str:
-    """sections：要导出的内容名称列表（见 SECTIONS）；None = 全部。"""
+def build_html(R: Result, conclusions: list[str], sections: list[str] | None = None, compare: dict | None = None) -> str:
+    """sections：要导出的内容名称列表（见 SECTIONS）；None = 全部。compare：和上次比的数据（compare.build），没有就不出这两页。"""
     cfg, CL = R.cfg, R.classes
     S, NS = cfg.subjects, len(cfg.subjects)
     st, on, g = R.class_stats, R.online, R.class_stats["全年级"]
@@ -210,6 +212,10 @@ def build_html(R: Result, conclusions: list[str], sections: list[str] | None = N
              f'<p class="note" style="position:absolute;bottom:40px;left:44px;right:44px">临界生：升学参考线（全级前{pct(cfg.promote_ratio, 0)}，{NS}科总分 {R.cut:g} 分）上下 {cfg.near_range:g} 分以内的学生，按班级排列。'
              f'表头：{legend}。“薄弱”按得分率比较。本名单仅供教师使用。</p>')
 
+    if compare:
+        for title, body in _compare_pages(compare):
+            page(title, body)
+
     html = "".join(p.replace("{PNO}", str(i + 1)) for i, p in enumerate(pages))
     return f'<!doctype html><html><head><meta charset="utf-8"><style>{CSS}</style></head><body>{html}</body></html>'
 
@@ -352,3 +358,67 @@ def html_to_pdf(html: str, pdf_path: Path):
         return pdf_path
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def _move(a, b):
+    """名次从 a 变到 b：↑ 进步、↓ 退步。"""
+    if a == b:
+        return '<span class="note">持平</span>'
+    return f'<span class="up">↑{a - b}</span>' if b < a else f'<span class="dn">↓{b - a}</span>'
+
+
+def _delta(v, d=2, unit=""):
+    if abs(v) < 0.5 * 10 ** -d:
+        return '<span class="note">持平</span>'
+    return f'<span class="{"up" if v > 0 else "dn"}">{"+" if v > 0 else "−"}{abs(v):.{d}f}{unit}</span>'
+
+
+def _compare_pages(C: dict) -> list[tuple[str, str]]:
+    """和上次比：两页。一页各班、各科；一页学生名次进退和上次的临界生。"""
+    pv, nw = C["prev"], C["now"]
+    small = '<span style="color:#8a9096;font-size:11px">'
+    who = (f'<p class="note" style="margin-bottom:10px">上次：{pv["exam"]}{"（" + pv["date"] + "）" if pv["date"] else ""}，{pv["scheme"]}方案，'
+           f'实考 {pv["n"]} 人，升学线 {pv["cut"]:g} 分；本次：{nw["scheme"]}方案，实考 {nw["n"]} 人，升学线 {nw["cut"]:g} 分。箭头 ↑ 为进步、↓ 为退步。</p>')
+    hs = C["hasStructure"]
+    hdr = "<tr><th>班级</th>" + ("<th>结构分</th><th>结构分名次</th>" if hs else "") + "<th>综合得分名次</th><th>上线率</th></tr>"
+    body = ""
+    for x in C["classes"]:
+        if not x["found"]:
+            body += f'<tr><td class="b">{x["name"]}</td><td colspan="{4 if hs else 2}" class="note">上次没有这个班</td></tr>'
+            continue
+        body += f'<tr><td class="b">{x["name"]}</td>'
+        if hs:
+            body += (f'<td>{small}{f2(x["prevStruct"])} →</span> <b>{f2(x["struct"])}</b> {_delta(x["struct"] - x["prevStruct"])}</td>'
+                     f'<td>{small}{x["prevStructRank"]} →</span> <b>{x["structRank"]}</b> {_move(x["prevStructRank"], x["structRank"])}</td>')
+        body += (f'<td>{small}{x["prevRank"]} →</span> <b>{x["rank"]}</b> {_move(x["prevRank"], x["rank"])}</td>'
+                 f'<td>{small}{pct(x["prevOnlineRate"])} →</span> <b>{pct(x["onlineRate"])}</b></td></tr>')
+    cls_tbl = f'<h3>各班</h3><table>{hdr}{body}</table>'
+    sh = "<tr><th>科目</th><th>平均得分率</th><th>及格率</th><th>优秀率</th></tr>"
+    cell = lambda a, b: f'<td>{small}{pct(a)} →</span> <b>{pct(b)}</b> {_delta((b - a) * 100, 1, "点")}</td>'
+    sb = "".join(f'<tr><td class="b">{x["subject"]}</td>{cell(x["prevAvgRate"], x["avgRate"])}{cell(x["prevPass"], x["pass"])}{cell(x["prevExc"], x["exc"])}</tr>'
+                 for x in C["subjects"]) or '<tr><td colspan="4" class="note">两次考试没有相同的科目</td></tr>'
+    sub_tbl = (f'<h3>各科（全年级）</h3><table>{sh}{sb}</table>'
+               '<p class="note" style="margin-top:6px">两次满分可能不同，所以比得分率（平均分 ÷ 满分）。“点”是百分点。</p>')
+    page1 = who + f'<div class="row"><div style="flex:1.15">{cls_tbl}</div><div style="flex:1">{sub_tbl}</div></div>'
+
+    S = C["students"]
+    ups = [x for x in S if x["change"] > 0][:12]                          # 每边 12 人，给下面的临界生留出位置
+    dns = sorted([x for x in S if x["change"] < 0], key=lambda x: (x["change"], x["rank"]))[:12]
+
+    def stbl(L):
+        if not L:
+            return '<p class="note">无</p>'
+        h = "<tr><th>班级</th><th>姓名</th><th>上次级名次</th><th>本次级名次</th><th>进退</th></tr>"
+        h += "".join(f'<tr><td>{x["cls"]}</td><td class="b">{x["name"]}</td><td>{x["prevRank"]}</td><td class="b">{x["rank"]}</td>'
+                     f'<td>{_move(x["prevRank"], x["rank"])}</td></tr>' for x in L)
+        return f'<table style="font-size:12px">{h}</table>'.replace("<td>", '<td style="padding:3px">')
+    a, b = C["nearUp"], C["nearDown"]
+    moved = lambda goal: "、".join(f'{x["cls"]}{x["name"]}（{x["prevTotal"]:g}→{x["total"]:g}）' for x in C["near"] if x["where"] == goal) or "无"
+    near = (f'<h3 style="margin-top:14px">上次的临界生</h3><ul class="find" style="font-size:12.5px;line-height:1.6">'
+            f'<li>上次<b>线下</b>临界生 {a["all"]} 人，这次能对上 {a["found"]} 人，其中 <b class="up">{a["moved"]}</b> 人上线了：{moved("上线了")}。</li>'
+            f'<li>上次<b>线上</b>临界生 {b["all"]} 人，这次能对上 {b["found"]} 人，其中 <b class="dn">{b["moved"]}</b> 人掉到了线下：{moved("掉到线下")}。</li></ul>')
+    page2 = (f'<div class="row" style="gap:18px"><div style="flex:1"><h3>进步最多的学生</h3>{stbl(ups)}</div>'
+             f'<div style="flex:1"><h3>退步最多的学生</h3>{stbl(dns)}</div></div>{near}'
+             f'<p class="note" style="position:absolute;bottom:40px;left:44px;right:44px">学生按“班级 + 姓名”对应：两次都参加并且能对上的共 {len(S)} 人；'
+             f'换了班、同班重名、缺考的不在比较之内。名单含学生姓名，仅限教师使用。</p>')
+    return [("和上次考试比较（一）：各班与各科", page1), ("和上次考试比较（二）：学生名次与临界生", page2)]

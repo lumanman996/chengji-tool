@@ -58,7 +58,7 @@ jobs:
         run: python -c "import base64, os, pathlib; d = os.environ.get('LICENSE_IMPL', ''); d and pathlib.Path('chengji/_license_impl.py').write_bytes(base64.b64decode(d)); print('license module:', bool(d))"
       - name: 打包
         run: python packaging/build.py
-      - name: 用打好的程序自检并试跑示例数据（含生成 PDF）
+      - name: 用打好的程序自检、试跑示例数据（含生成 PDF），再走一遍一键更新
         run: python packaging/smoke_test.py
       - uses: actions/upload-artifact@v7
         with:
@@ -70,5 +70,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "分寸 · 成绩核算 $GITHUB_REF_NAME" --notes-file packaging/发布说明.md \
+          python packaging/release_notes.py "$GITHUB_REF_NAME" release_notes.md
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "分寸 · 成绩核算 $GITHUB_REF_NAME" --notes-file release_notes.md \
             || gh release upload "$GITHUB_REF_NAME" dist/*.zip --clobber

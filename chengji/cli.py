@@ -351,7 +351,8 @@ def main(argv=None):
     print(f"已生成：{xlsx}")
     pdf_note = "发布版 PDF：未生成"
     if not a.不生成PDF:
-        from .pdf_report import SECTIONS, available_sections, build_html, html_to_pdf
+        from .pdf_report import COMPARE, SECTIONS, available_sections, build_html, html_to_pdf
+        SECTIONS = [k for k in SECTIONS if k != COMPARE]                      # “和上次比”只在界面里导出
         avail = available_sections(R)
         chosen = [k for k in avail if school.pdf_sections.get(k, True)]      # 学校设置里的默认选择
         if a.PDF内容:
