@@ -838,7 +838,7 @@ async function go(p){
   $$(".page").forEach(x => x.classList.toggle("on", x.id === p));
   $$("#nav button").forEach(b => { b.classList.toggle("on", b.dataset.p === p); b.toggleAttribute("aria-current", b.dataset.p === p); });
   $(".main").scrollTop = 0;
-  if (p === "settings") { pickSetTab(setTab); loadSettings(); }
+  if (p === "settings") { pickSetTab(setTab); await loadSettings(); }   // 等设置读完再算打开好了（读完会清掉“改过”的标记，不能晚于使用者的修改）
   if (p === "home") refresh();
 }
 $$("#nav button").forEach(b => b.onclick = () => go(b.dataset.p));
