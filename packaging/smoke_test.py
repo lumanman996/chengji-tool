@@ -51,6 +51,10 @@ def main():
     info = json.loads((HOME / "自检结果.json").read_text(encoding="utf-8"))
     print("自检：", info)
     assert info["ok"] and info["license"] in ("open", "trial", "active", "expired"), info
+    licensed = (ROOT / "chengji" / "_license_impl.py").is_file()
+    if licensed:                                           # 正式版：验证模块必须是编译成机器码的，安装包里没有它的源码
+        assert info.get("licenseModule") == "native", f"验证模块不是机器码：{info.get('licenseModule')}"
+        tamper_check()
     expired = info["license"] == "expired"                 # 在本机试跑时，这台电脑的试用可能已经到期（GitHub 上每次都是新电脑）
     if expired:
         print("（提醒）这台电脑的试用已到期：跳过需要导出的两步试跑，直接检查一键更新。在 GitHub 上打包时每次都是完整试跑。")
@@ -82,6 +86,34 @@ def try_samples(T):
     name = "试跑_中考核算"
     run(HOME / "samples" / "示例登分表_中考.xlsx", "--任课", T, "--考试", name, "--方案", "中考", "--满分", "生物=50 地理=50 体育=50", "--PDF内容", "0", "--不确认")
     assert (HOME / "output" / name / f"{name}_各班综合统计.xlsx").is_file()
+
+
+def tamper_check():
+    """在程序的一份副本里删掉验证模块：正式版应当锁住导出，而不是变成不限制的版本。"""
+    tmp = DIST / "_篡改测试"
+    shutil.rmtree(tmp, ignore_errors=True)
+    if sys.platform == "darwin":
+        app = tmp / "分寸.app"
+        subprocess.run(["ditto", str(DIST / "分寸.app"), str(app)], check=True)
+        copy_exe = app / "Contents" / "MacOS" / "分寸"
+        found = list(app.rglob("_license_impl*.so"))
+    else:
+        shutil.copytree(exe.parent, tmp / "分寸")
+        copy_exe = tmp / "分寸" / exe.name
+        found = list((tmp / "分寸").rglob("_license_impl*.pyd")) + list((tmp / "分寸").rglob("_license_impl*.so"))
+    assert found, "安装包里没有找到编译后的验证模块"
+    assert not list(tmp.rglob("_license_impl.py")), "安装包里不应该有验证模块的源码"
+    for f in found:
+        f.unlink()
+    home = tmp / "数据"
+    home.mkdir()
+    subprocess.run([str(copy_exe), "--自检"], cwd=home, capture_output=True, timeout=300,
+                   env={**os.environ, "CHENGJI_NO_OPEN": "1", "CHENGJI_HOME": str(home)})
+    info = json.loads((home / "自检结果.json").read_text(encoding="utf-8"))
+    print("删掉验证模块后：", info)
+    assert info["licenseModule"] == "none" and not info["canExport"] and info["license"] == "expired", "删掉验证模块后导出没有锁住"
+    shutil.rmtree(tmp, ignore_errors=True)
+    print("防篡改检查通过：验证模块是机器码；删掉它，导出就锁住。")
 
 
 def check_online():
