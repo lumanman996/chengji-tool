@@ -147,7 +147,7 @@ def main(argv=None):
     ap.add_argument("--方案", default=None, help="算法方案：平时 或 中考（不写则运行时询问，默认平时），方案内容见 学校设置.yaml")
     ap.add_argument("--升学比例", default="", help="升学线取全级前百分之几，如 80%%（不写则询问，默认见 学校设置.yaml）")
     ap.add_argument("--应考", "--学籍", dest="应考", default="", help="各班应考人数（不写则读任课总表的「班级信息」），如：九1=46 九2=45")
-    ap.add_argument("--上次名次", default="", help="上次考试各班结构分综合名次（平时方案的增值评价用），如：九1=3 九2=1")
+    ap.add_argument("--上次名次", default="", help="上次考试各班的两率一分名次（平时方案的增值评价用），如：九1=3 九2=1")
     ap.add_argument("--任课", default=str(ROOT / "data" / "任课总表.xlsx"), help="任课总表 Excel（默认 data/任课总表.xlsx）")
     ap.add_argument("--学校设置", default=str(ROOT / "config" / "学校设置.yaml"))
     ap.add_argument("--本校设置", default=str(ROOT / "data" / "本校设置.yaml"),
@@ -301,7 +301,7 @@ def main(argv=None):
     if "增值评价" in W:
         prev = parse_class_values(a.上次名次, gc)
         if interactive and not prev:
-            prev = ask_class_values("上次考试各班结构分综合名次（如 " + f"{CL[0]}=3 {CL[-1]}=1" + "，还缺 {left}）；"
+            prev = ask_class_values("上次考试各班的两率一分名次（如 " + f"{CL[0]}=3 {CL[-1]}=1" + "，还缺 {left}）；"
                                     "没有上次成绩直接回车：", CL, gc, 1, len(CL), allow_empty=True)
         miss = [c for c in CL if c not in prev]
         if prev and miss:
@@ -383,8 +383,10 @@ def main(argv=None):
             *([f"班级结构分（{cfg.scheme}）：" + "　".join(f"{c} {R.structure[c]['结构分']:.2f}（第{R.structure[c]['名次']}）"
                                                      for c in sorted(R.classes, key=lambda c: R.structure[c]['名次']))]
               if R.structure else []),
-            *([("上次名次：" + "、".join(f"{c}第{v}" for c, v in cfg.prev_rank.items())) if cfg.prev_rank
-               else "上次名次：未输入，增值评价只按本次名次给分"] if "增值评价" in cfg.structure else []),
+            *([("上次的两率一分名次：" + "、".join(f"{c}第{v}" for c, v in cfg.prev_rank.items())) if cfg.prev_rank
+               else "上次的两率一分名次：未输入，增值评价只按本次名次给分",
+               "本次的两率一分名次（下次考试的增值评价要用）：" + "、".join(f"{c}第{R.structure[c]['两率一分名次']}" for c in R.classes)]
+              if "增值评价" in cfg.structure else []),
             pdf_note,
             "未计入：" + ("；".join(f"{e['班级']} {e['姓名']}（{e['原因']}）" for e in data.excluded) or "无"),
             *msgs, "", "自动起草的结论（请审核后再发布）：", *[f"{i + 1}. {c}" for i, c in enumerate(concl)]]

@@ -97,6 +97,27 @@ ALGO_KEYS = ["算法方案", "结构分方案"] + [y for _a, y, _p in sv.LINES.v
 SAMPLE = ("示例登分表_九年级.xlsx", "示例任课总表.xlsx", "示例：九年级第一次月考")      # “用示例数据试一试”
 
 
+THEMES = ("跟随系统", "明亮", "暗色")
+ZOOMS = (80, 90, 100, 110, 120, 130, 140, 150)
+_OLD_ZOOM = {"标准": 100, "大": 110, "特大": 130}             # 2.0.3 以前的字号是三档
+
+
+def _zoom(v) -> int:
+    """字号：百分数，取最接近的一档（80%～150%）。"""
+    v = _OLD_ZOOM.get(v, v)
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return 100
+    return min(ZOOMS, key=lambda z: abs(z - v))
+
+
+def look_of(loc: dict) -> dict:
+    """本机设置里的外观：主题（跟随系统 / 明亮 / 暗色）、字号（百分数）。"""
+    t = loc.get("界面主题")
+    return {"theme": t if t in THEMES else "跟随系统", "zoom": _zoom(loc.get("界面字号", 100))}
+
+
 class App:
     """一次运行期间的状态：当前导入的登分表、当前的核算结果。"""
 
@@ -118,6 +139,7 @@ class App:
         self.window = None                # 程序窗口（有它才能弹出系统的“存储”对话框）；浏览器方式下是 None
         self.updater = updater.Updater()  # 一键更新：下载、替换
         self.update_info = None
+        self._upgraded = False            # 旧规则算的考试是否已经检查、重算过
 
     def school(self):
         return load_school(self.config, self.local)
@@ -126,10 +148,31 @@ class App:
     def api_state(self, _=None):
         s = self.school()
         loc = self._local()
-        return {"version": __version__, "school": s.name, "nativeDialog": self.window is not None,
+        upgraded = []
+        if not self._upgraded:                              # 以前按旧规则算的考试：第一次打开时按新规则重算
+            self._upgraded = True
+            upgraded = sv.upgrade_runs(self.output, s, self.teacher)
+        return {"upgraded": upgraded, "version": __version__, "school": s.name, "nativeDialog": self.window is not None,
                 "firstRun": not loc.get("已引导") and not loc.get("学校") and not sv.list_runs(self.output, 1),
-                "contact": CONTACT, "autoUpdate": auto_update_check(), "fontSize": loc.get("界面字号") or "标准", "root": friendly_path(self.root), "hasSample": (self.root / "samples" / SAMPLE[0]).is_file(), "license": lic.status(), "recent": sv.list_runs(self.output),
+                "contact": CONTACT, "autoUpdate": auto_update_check(), "look": look_of(loc), "root": friendly_path(self.root), "hasSample": (self.root / "samples" / SAMPLE[0]).is_file(), "license": lic.status(), "recent": sv.list_runs(self.output),
                 "templates": list(s.grade_subjects), "pdfDefaults": s.pdf_sections, "hasTeacherTable": self.teacher.is_file()}
+
+    def dark_start(self) -> bool:
+        """程序窗口刚打开、页面还没出来时用深色底吗（选了暗色，或者跟随系统而系统是深色）。"""
+        t = look_of(self._local())["theme"]
+        if t != "跟随系统":
+            return t == "暗色"
+        try:
+            if sys.platform == "darwin":
+                r = subprocess.run(["defaults", "read", "-g", "AppleInterfaceStyle"], capture_output=True, text=True, timeout=2)
+                return "Dark" in r.stdout
+            if sys.platform == "win32":
+                import winreg
+                k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+                return winreg.QueryValueEx(k, "AppsUseLightTheme")[0] == 0
+        except Exception:
+            pass
+        return False
 
     def api_welcome(self, body):
         """第一次打开的引导：记下学校名称（可以跳过），以后不再出现。"""
@@ -143,11 +186,20 @@ class App:
         return self.api_state()
 
     def api_ui_save(self, body):
+        """外观：主题、字号。立即生效，只存在本机设置里；reset = 恢复默认外观。"""
         cur = self._local()
-        if body.get("fontSize") in ("标准", "大", "特大"):
-            cur["界面字号"] = body["fontSize"]
+        if body.get("reset"):
+            cur.pop("界面主题", None)
+            cur.pop("界面字号", None)
+        if body.get("theme") in THEMES:
+            cur["界面主题"] = body["theme"]
+        if body.get("zoom") is not None:
+            cur["界面字号"] = _zoom(body["zoom"])
+        for k, default in (("界面主题", "跟随系统"), ("界面字号", 100)):    # 默认值不写进文件
+            if cur.get(k) == default:
+                cur.pop(k)
         self._write_local(cur)
-        return {"fontSize": cur.get("界面字号") or "标准"}
+        return look_of(cur)
 
     def api_try_sample(self, _=None):
         """用自带的虚构示例数据直接算一遍，让新用户先看到效果。用示例任课总表，不存进“最近的考试”。"""
@@ -453,7 +505,8 @@ def make_handler(app: App, token: str):
 
         def do_GET(self):
             if urlparse(self.path).path in ("/", "/index.html"):
-                html = UI_FILE.read_text(encoding="utf-8").replace("__TOKEN__", token)
+                html = (UI_FILE.read_text(encoding="utf-8").replace("__TOKEN__", token)
+                        .replace("__LOOK__", json.dumps(look_of(app._local()))))      # 主题、字号在页面画出来之前就定下来
                 self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
             else:
                 self._send(404, b"{}")

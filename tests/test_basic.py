@@ -94,7 +94,7 @@ def test_ratio_parse():
 
 
 # ---------------- 班级结构分：用一组能手算的小数据核对 ----------------
-def _tiny(scheme, prev=None):
+def _tiny(scheme, prev=None, school=None, enrolled=None):
     """3 个班、每班 2 人，语文（满分120，合格72，优秀96）+ 数学（满分100，合格60，优秀80）。"""
     import pandas as pd
     from chengji.analysis import analyze
@@ -105,8 +105,8 @@ def _tiny(scheme, prev=None):
     df = pd.DataFrame([(c, f"生{i}", f"{i:02d}", a, b) for i, (c, a, b) in enumerate(rows)],
                       columns=["班级", "姓名", "考号", "语文", "数学"])
     data = ScoreData(df=df, grade="九年级", subjects=["语文", "数学"])
-    cfg = make_config(SCHOOL, "九年级", ["语文", "数学"], "测试", scheme=scheme,
-                      enrolled={"九1": 2, "九2": 3, "九3": 2}, prev_rank=prev)
+    cfg = make_config(school or SCHOOL, "九年级", ["语文", "数学"], "测试", scheme=scheme,
+                      enrolled=enrolled or {"九1": 2, "九2": 3, "九3": 2}, prev_rank=prev)
     return analyze(data, cfg).structure
 
 
@@ -117,13 +117,69 @@ def test_structure_pingshi():
     sub = {"九1": avg["九1"] + 20 + 20 + 5,
            "九2": avg["九2"] + 0.5 * 20 + 0 + 2 / 3 * 5,
            "九3": avg["九3"] + 0 + 0 + 5}
-    # 小计名次 1、2、3 → 5、4.9、4.8；九1 上次第2进步1名 5.05 → 封顶 5；九2 上次第1退步1名 4.85；九3 不变 4.8
+    # 两率一分名次 1、2、3 → 5、4.9、4.8；九1 上次第2进步1名 5.05 → 封顶 5；九2 上次第1退步1名 4.85；九3 不变 4.8
     add = {"九1": 5.0, "九2": 4.85, "九3": 4.8}
     for c in X:
         assert abs(X[c]["小计"] - sub[c]) < 1e-9
         assert abs(X[c]["增值评价分"] - add[c]) < 1e-9
         assert abs(X[c]["结构分"] - (sub[c] + add[c])) < 1e-9
     assert [X[c]["名次"] for c in ("九1", "九2", "九3")] == [1, 2, 3]
+
+
+def test_value_added_ranks_by_two_rates_only():
+    """增值评价按“两率一分”（平均成绩 + 全科合格率 + 全科优秀率）排名，参考率不参与（2026-10-09 按上级文件更正）。
+    这里故意把参考率的分值调得很大、九1 的参考率很低：按“小计”排九1 会是最后一名，按两率一分它是第一名。"""
+    import copy
+    school = copy.deepcopy(SCHOOL)
+    school.structures["平时"] = {"平均成绩": 10, "全科合格率": 1, "全科优秀率": 1, "参考率": 83, "增值评价": 5,
+                                 "增值名次差": 0.1, "增值进退步": 0.05}
+    X = _tiny("平时", prev={"九1": 3, "九2": 2, "九3": 1}, school=school, enrolled={"九1": 20, "九2": 3, "九3": 2})
+    two = {c: X[c]["平均成绩分"] + X[c]["全科合格率分"] + X[c]["全科优秀率分"] for c in X}
+    assert [X[c]["两率一分名次"] for c in ("九1", "九2", "九3")] == [1, 2, 3]
+    assert all(abs(X[c]["两率一分"] - two[c]) < 1e-9 for c in X)
+    assert X["九1"]["小计"] < X["九2"]["小计"] < X["九3"]["小计"]                # 按小计排正好反过来
+    # 基础分 5、4.9、4.8；和上次的两率一分名次比：九1 第3→第1 进步2名 +0.1 → 5.0 封顶 5；九2 持平 4.9；九3 第1→第3 退步2名 -0.1 → 4.7
+    assert [round(X[c]["增值评价分"], 9) for c in ("九1", "九2", "九3")] == [5.0, 4.9, 4.7]
+
+
+def test_prefill_uses_last_two_rate_ranks(tmp_path):
+    """同年级再算时带入的“上次名次”是上次的两率一分名次；旧规则存下的结果里没有这一项，就用存下的得分现算。"""
+    from chengji import service as sv
+    v = {"exam": "上次", "grade": "九年级", "structure": [
+        {"name": "九1", "名次": 3, "平均成绩分": 30, "全科合格率分": 10, "全科优秀率分": 5, "参考率分": 1, "应考人数": 40, "应考按实考": True},
+        {"name": "九2", "名次": 1, "平均成绩分": 28, "全科合格率分": 9, "全科优秀率分": 4, "参考率分": 5, "应考人数": 40, "应考按实考": True},
+        {"name": "九3", "名次": 2, "平均成绩分": 20, "全科合格率分": 9, "全科优秀率分": 4, "参考率分": 5, "应考人数": 40, "应考按实考": True}]}
+    assert sv.two_rate_ranks(v["structure"]) == {"九1": 1, "九2": 2, "九3": 3}
+    (tmp_path / "上次").mkdir()
+    import json
+    (tmp_path / "上次" / sv.RUN_FILE).write_text(json.dumps({"view": v}, ensure_ascii=False), encoding="utf-8")
+    assert sv.last_run_for(tmp_path, "九年级")["ranks"] == {"九1": 1, "九2": 2, "九3": 3}
+
+
+def test_old_runs_recomputed_with_new_rule(tmp_path):
+    """旧规则算的考试：第一次打开时按新规则重算，旧结果留一份备份，“最近的考试”的顺序不变。"""
+    import json
+    import os
+    from chengji import service as sv
+    src = ROOT / "samples" / "示例登分表_九年级.xlsx"
+    T = ROOT / "samples" / "示例任课总表.xlsx"
+    for i, name in enumerate(["第一次", "第二次"]):
+        R, c, m = sv.compute(src, SCHOOL, {"scheme": "平时", "exam": name}, T)
+        out = sv.save_run(tmp_path, src, {"scheme": "平时", "exam": name}, sv.to_view(R, c, m))
+        f = out / sv.RUN_FILE
+        meta = json.loads(f.read_text(encoding="utf-8"))
+        meta.pop("rule")                                                      # 假装是旧版本存的
+        for x in meta["view"]["structure"]:
+            x.pop("两率一分名次"); x["小计名次"] = 1
+        f.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+        os.utime(f, (1000 + i, 1000 + i))
+    before = [r["name"] for r in sv.list_runs(tmp_path)]
+    assert sorted(sv.upgrade_runs(tmp_path, SCHOOL, T)) == ["第一次", "第二次"]
+    assert [r["name"] for r in sv.list_runs(tmp_path)] == before == ["第二次", "第一次"]
+    meta = json.loads((tmp_path / "第一次" / sv.RUN_FILE).read_text(encoding="utf-8"))
+    assert meta["rule"] == sv.RULE and all("两率一分名次" in x for x in meta["view"]["structure"])
+    assert (tmp_path / "第一次" / sv.OLD_BACKUP).is_file()
+    assert sv.upgrade_runs(tmp_path, SCHOOL, T) == []                        # 重算过的不再重算
 
 
 def test_structure_pingshi_no_previous():

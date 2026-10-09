@@ -84,7 +84,7 @@ def verify(score_path, xlsx_path, teacher_path=None, scheme="平时", ratio=None
         r4 = [c.value for c in st[4]]
         head = [b or a for a, b in zip(r3, r4)]                 # 合并的单列表头在第 3 行
         col = {h: j for j, h in enumerate(head) if h}
-        keys = [k for k in ("应考人数", "实考人数", "小计", "小计名次", "增值评价分", "前10名人数", "加分",
+        keys = [k for k in ("应考人数", "实考人数", "小计", "两率一分", "两率一分名次", "增值评价分", "前10名人数", "加分",
                             "结构分", "名次") if k in col]
         keys += [k + "分" for k in ("平均成绩", "全科合格率", "全科优秀率", "参考率", "进线率") if k + "分" in col]
         rows = {r[0]: r for r in st.iter_rows(min_row=5, values_only=True) if r[0] in R.classes}
