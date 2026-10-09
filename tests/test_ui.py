@@ -121,9 +121,9 @@ def test_settings_saved_locally(app, page):
 def test_trial_expired_then_activate(app, page, tmp_path, monkeypatch):
     """试用到期：能算能看、不能导出；输入本机的激活码后可以导出。（需要本机有许可模块和生成器）"""
     impl = pytest.importorskip("chengji._license_impl")
-    if not (ROOT / "admin" / "make_code.py").is_file():
+    if not (ROOT / "admin" / "工具" / "make_code.py").is_file():
         pytest.skip("没有发码程序")
-    sys.path.insert(0, str(ROOT / "admin"))
+    sys.path.insert(0, str(ROOT / "admin" / "工具"))
     import make_code
     monkeypatch.setenv("CHENGJI_LICENSE_ENFORCE", "1")
     monkeypatch.setenv("CHENGJI_LICENSE_DIR", str(tmp_path / "lic"))
