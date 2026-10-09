@@ -223,7 +223,7 @@ def draft_conclusions(R: Result) -> list[str]:
     cfg, C = R.cfg, R.classes
     out = []
     n = len(R.df)
-    out.append(f"升学线：全级有效成绩{n}人，前{pct(cfg.promote_ratio, 0)}为第{R.cut_rank}名，对应{len(cfg.subjects)}科总分"
+    out.append(f"升学线：全级实考{n}人，前{pct(cfg.promote_ratio, 0)}为第{R.cut_rank}名，对应{len(cfg.subjects)}科总分"
                f"{R.cut:g}分（满分{cfg.total_full:g}）；线上{R.above}人（{pct(R.above / n)}），线下{R.below}人。")
     big = max(R.bands[:-1] or R.bands, key=lambda b: b[4])
     out.append(f"分数段：{big[0]}分人数最多（{big[4]}人）；{R.bands[0][0]}{R.bands[0][4]}人，"
