@@ -33,12 +33,32 @@ def selftest() -> int:
     return 0 if ok else 1
 
 
+def _screen_fit(webview) -> tuple[int, int, bool]:
+    """窗口开多大：屏幕够大就 1320×880；屏幕小（如 1366×768，或者系统缩放 125%、150% 后放不下）就直接铺满，免得窗口比屏幕还大。
+
+    pywebview 的窗口尺寸按“缩放后的”算；屏幕尺寸在 Windows 上可能是没缩放的，所以再除一下系统缩放比例
+    （万一已经是缩放后的，除了只会显得屏幕更小，结果是铺满窗口，也不碍事）。算不出来就当屏幕够大。"""
+    try:
+        sc = webview.screens[0]
+        w, h = sc.width, sc.height
+        if sys.platform == "win32":
+            import ctypes
+            k = ctypes.windll.shcore.GetScaleFactorForDevice(0) / 100 or 1
+            w, h = w / k, h / k
+    except Exception:
+        return 1320, 880, False
+    return min(1320, int(w) - 40), min(880, int(h) - 80), w < 1300 or h < 800
+
+
 def main(browser: bool = False):
     httpd, url, app = start()
     if not browser:
         try:
             import webview
-            app.window = webview.create_window(TITLE, url, width=1320, height=880, min_size=(1080, 720))
+            width, height, small = _screen_fit(webview)
+            app.window = webview.create_window(TITLE, url, width=max(width, 860), height=max(height, 540),
+                                               min_size=(860, 540), maximized=small,
+                                               background_color="#111315" if app.dark_start() else "#F5F4F0")
             webview.start()
             httpd.shutdown()
             return

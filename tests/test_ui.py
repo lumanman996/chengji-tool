@@ -42,6 +42,12 @@ def page():
         assert not errs, errs
 
 
+def settings(pg, tab="school"):
+    """打开设置页的某个标签：school 学校与科目、algo 分数线与算法、teacher 任课总表、look 外观、lic 使用许可。"""
+    pg.evaluate("go('settings')"); pg.click(f'#stabs [data-s="{tab}"]')
+    pg.wait_for_selector(f'.spane[data-s="{tab}"].on')
+
+
 def idle(pg):
     pg.wait_for_function("!document.querySelector('#busy').classList.contains('on')", timeout=120000)
 
@@ -104,7 +110,7 @@ def test_zhongkao_needs_full_marks(app, page):
 def test_settings_saved_locally(app, page):
     root, url = app
     page.goto(url); page.wait_for_selector("#recent .li")
-    page.evaluate("go('settings')"); page.wait_for_selector("#setChips .chip")
+    settings(page); page.wait_for_selector("#setChips .chip")
     page.fill("#sSchool", "测试中学"); page.fill('#setChips input[data-s="生物"]', "50")
     page.click("#saveBtn"); page.wait_for_selector("#saved.on")
     text = (root / "data" / "本校设置.yaml").read_text(encoding="utf-8")
@@ -243,7 +249,7 @@ def test_new_subject_in_wizard(app, page, tmp_path):
     head = page.inner_text("#clT thead")
     assert "信息技术" in head and "加试" not in head
     assert "信息技术: 50" in (root / "data" / "本校设置.yaml").read_text(encoding="utf-8")     # 记住了，下次自动认得
-    page.evaluate("go('settings')"); page.wait_for_selector('#setChips input[data-s="信息技术"]')
+    settings(page); page.wait_for_selector('#setChips input[data-s="信息技术"]')
     page.fill("#newSub", "劳动"); page.fill("#newSubFull", "40"); page.click("#saveBtn"); page.wait_for_selector('#setChips input[data-s="劳动"]')
     assert "劳动: 40" in (root / "data" / "本校设置.yaml").read_text(encoding="utf-8")
 
@@ -254,7 +260,7 @@ def test_algo_editable_in_settings(app, page):
     import_and_compute(page, url, "示例登分表_九年级.xlsx", "改比例之前")
     page.wait_for_selector("#resBody:not(.hide)")
     before = page.inner_text("#ovRank .rk").split()[:3]
-    page.evaluate("go('settings')"); page.wait_for_selector("#algoStruct .chip")
+    settings(page, "algo"); page.wait_for_selector("#algoStruct .chip")
     assert page.inner_text("#sum1") == "合计 100%" and page.inner_text("#sum2") == "合计 100%"
     assert [i.input_value() for i in page.locator("#algoStruct input").all()] == ["50", "20", "20", "5", "0", "5"]
     page.fill('#algoStruct input[data-k="平均成绩"]', "60")
@@ -282,7 +288,7 @@ def test_algo_editable_in_settings(app, page):
     ws = openpyxl.load_workbook(root / "output" / "改比例之前" / "改比例之前_各班综合统计.xlsx")["班级结构分"]
     assert any("平均成绩（50分）" in str(c.value) for c in ws[3])
     # 恢复默认
-    page.evaluate("go('settings')"); page.wait_for_selector("#algoStruct .chip")
+    settings(page, "algo"); page.wait_for_selector("#algoStruct .chip")
     page.click("#algoReset"); page.wait_for_selector("#dlg.on"); page.click("#dlgOk")
     page.wait_for_function("document.querySelector('#algoStruct input').value === '50'")
     assert "算法方案" not in (root / "data" / "本校设置.yaml").read_text(encoding="utf-8")
@@ -292,7 +298,7 @@ def test_settings_state_the_rules(app, page):
     """设置界面要把两条规则写明白：平时折算百分制、中考不折算；增值评价封顶。"""
     root, url = app
     page.goto(url); page.wait_for_selector("#recent .li")
-    page.evaluate("go('settings')"); page.wait_for_selector("#algoStruct .chip")
+    settings(page, "algo"); page.wait_for_selector("#algoStruct .chip")
     f = page.inner_text("#algoFormula")                                    # 平时考试
     assert page.is_checked("#algoNorm") and "优秀率×25% + 及格率×25% + 平均分÷满分×100×50%" in f and "折算成百分制" in f
     add = page.inner_text("#algoAdd")
@@ -386,7 +392,7 @@ def test_unsaved_settings_warning_and_font(app, page):
     """设置改了没保存就离开：提醒；字号调大后记住。"""
     root, url = app
     page.goto(url); page.wait_for_selector("#recent .li")
-    page.evaluate("go('settings')"); page.wait_for_selector("#setChips .chip")
+    settings(page); page.wait_for_selector("#setChips .chip")
     assert not page.is_visible("#savebar")
     page.fill("#sSchool", "临时改的名字")
     assert page.is_visible("#savebar")
@@ -394,12 +400,64 @@ def test_unsaved_settings_warning_and_font(app, page):
     page.click("#dlgAlt")                                                      # 不保存
     page.wait_for_function("document.querySelector('#home').classList.contains('on')")
     assert "临时改的名字" not in (root / "data" / "本校设置.yaml").read_text(encoding="utf-8")
-    page.evaluate("go('settings')"); page.wait_for_selector("#setChips .chip")
-    page.click('#fontSeg button[data-f="大"]'); page.wait_for_timeout(400)
-    assert "界面字号: 大" in (root / "data" / "本校设置.yaml").read_text(encoding="utf-8")
-    assert not page.is_visible("#savebar")                                     # 调字号不算“未保存的修改”
-    page.goto(url); page.wait_for_selector("#recent .li"); page.wait_for_timeout(300)
-    assert page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--zoom').trim()") == "1.12"
+    settings(page, "school"); page.fill("#sSchool", "又改了一次")
+    assert page.is_visible('#stabs [data-s="school"] .dot')                   # 标签上的小金点：这里有没保存的修改
+    page.click("#discardBtn"); page.wait_for_selector('#stabs [data-s="school"] .dot', state="hidden")
+
+
+def test_appearance(app, page):
+    """外观：主题（跟随系统 / 明亮 / 暗色）、字号放大缩小、恢复字号、恢复默认外观。立即生效，记在本机设置里，不走保存条。"""
+    root, url = app
+    yaml_text = lambda: (root / "data" / "本校设置.yaml").read_text(encoding="utf-8")
+    theme = lambda: page.evaluate("document.documentElement.dataset.theme")
+    zoom = lambda: page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--zoom').trim()")
+    page.emulate_media(color_scheme="light")
+    page.goto(url); page.wait_for_selector("#recent .li")
+    assert theme() == "light" and zoom() == "1"
+    page.emulate_media(color_scheme="dark"); page.wait_for_timeout(100)
+    assert theme() == "dark"                                                   # 跟随系统：系统变深色，界面跟着变
+    settings(page, "look")
+    assert page.inner_text("#zoomVal") == "100%" and page.is_disabled("#zoomReset") and page.is_disabled("#lookReset")
+    page.click('#themeSeg button[data-v="明亮"]'); assert theme() == "light"
+    page.click("#zoomIn"); page.click("#zoomIn"); page.wait_for_timeout(500)
+    assert page.inner_text("#zoomVal") == "120%" and zoom() == "1.2"
+    assert "界面主题: 明亮" in yaml_text() and "界面字号: 120" in yaml_text()
+    assert not page.is_visible("#savebar")                                     # 外观立即生效，不算“未保存的修改”
+    page.click("#zoomReset"); page.wait_for_timeout(500)
+    assert zoom() == "1" and "界面字号" not in yaml_text() and "界面主题: 明亮" in yaml_text()
+    page.keyboard.press("Control+Equal"); page.keyboard.press("Control+Equal"); page.keyboard.press("Control+Minus")
+    page.wait_for_timeout(500)
+    assert page.inner_text("#zoomVal") == "110%" and "界面字号: 110" in yaml_text()
+    page.click('#themeSeg button[data-v="暗色"]'); page.wait_for_timeout(500)
+    page.emulate_media(color_scheme="light")
+    page.goto(url); page.wait_for_selector("#recent .li")                     # 重新打开：一开始就是暗色、110%（服务直接填进页面）
+    assert theme() == "dark" and zoom() == "1.1"
+    settings(page, "look"); assert "暗色" in page.inner_text("#lookNow")
+    page.click("#lookReset"); page.wait_for_timeout(400)
+    assert theme() == "light" and zoom() == "1" and "界面主题" not in yaml_text() and "界面字号" not in yaml_text()
+    assert page.is_disabled("#lookReset")
+
+
+def test_tabs_are_clear_and_keyboard_friendly(app, page):
+    """标签：选中的有 aria-selected，下面一行说明；左右方向键能切换；带 ? 号的表头点一下出说明（不排序）。"""
+    root, url = app
+    import_and_compute(page, url, "示例登分表_九年级.xlsx", "标签测试")
+    page.wait_for_selector("#resBody:not(.hide)")
+    assert page.get_attribute('#tabs [data-t="ov"]', "aria-selected") == "true" and "主要结论" in page.inner_text("#tabHint")
+    page.click('#tabs [data-t="st"]')
+    assert "满分 100" in page.inner_text("#tabHint") and page.is_visible("#st") and not page.is_visible("#ov")
+    page.keyboard.press("ArrowRight")
+    assert page.get_attribute('#tabs [data-t="cl"]', "aria-selected") == "true" and page.is_visible("#cl")
+    assert page.get_attribute('#tabs [data-t="te"]', "data-tip")             # 没选中的标签停一下也有说明
+    page.click('#tabs [data-t="de"]')
+    order = page.inner_text("#deT tbody tr td:nth-child(3)")
+    page.click('#deT th:has-text("级名次") .qi')
+    page.wait_for_selector("#tip.on"); assert "全年级" in page.inner_text("#tip")
+    assert page.inner_text("#deT tbody tr td:nth-child(3)") == order          # 点 ? 号只出说明，不排序
+    settings(page, "algo")
+    assert "比例" in page.inner_text("#stabHint") and page.get_attribute('#stabs [data-s="algo"]', "aria-selected") == "true"
+    settings(page, "teacher"); page.click("#tEdit"); page.wait_for_selector("#ted.on")
+    page.keyboard.press("Escape"); page.wait_for_selector("#ted", state="hidden")  # Esc 关掉弹窗
 
 
 def _second_exam(tmp_path):
@@ -453,7 +511,7 @@ def test_teacher_editor(app, page):
     from chengji.config import load_enrolled, load_school, load_teachers
     root, url = app
     page.goto(url); page.wait_for_selector("#recent .li")
-    page.evaluate("go('settings')"); page.wait_for_selector("#tEdit")
+    settings(page, "teacher"); page.wait_for_selector("#tEdit")
     page.click("#tEdit"); page.wait_for_selector("#ted.on")
     page.click('#tedSeg button[data-g="九年级"]')
     n = page.locator("#tedRows tr[data-i]").count()
@@ -483,7 +541,7 @@ def test_help_and_lines(app, page):
     for k in ("三步上手", "登分表怎么填", "名词解释", "全科合格率", "常见问题", "关于"):
         assert k in txt
     assert page.inner_text("#aboutVer") and not page.is_visible("#h5")       # 源码运行没有激活模块：不显示“试用与激活”
-    page.evaluate("go('settings')"); page.wait_for_selector("#lineChips .chip")
+    settings(page, "algo"); page.wait_for_selector("#lineChips .chip")
     assert [i.input_value() for i in page.locator("#lineChips input").all()] == ["60", "80", "85", "75", "15"]
     page.fill('#lineChips input[data-l="及格线"]', "85"); page.click("#saveBtn")
     page.wait_for_function("document.querySelector('#saveErr').textContent.includes('优秀线要比及格线高')")

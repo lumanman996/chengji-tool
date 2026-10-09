@@ -4,21 +4,47 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>分寸 · 成绩核算</title>
+<script>
+// 主题、字号在页面画出来之前就定下来（由本机服务填进来），免得打开时先白后黑地闪一下
+(function () {
+  var L = {}; try { L = JSON.parse('__LOOK__'); } catch (e) {}
+  window.LOOK = {theme: L.theme || "跟随系统", zoom: L.zoom || 100};
+  var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches, R = document.documentElement;
+  R.dataset.theme = LOOK.theme === "暗色" || (LOOK.theme === "跟随系统" && dark) ? "dark" : "light";
+  R.style.setProperty("--zoom", LOOK.zoom / 100);
+  var w = innerWidth * 100 / LOOK.zoom; R.dataset.w = w >= 1180 ? "wide" : w >= 940 ? "mid" : "narrow";
+  if (/Win/.test(navigator.platform)) R.classList.add("win");
+})();
+</script>
 <style>
+/* ================= 颜色：明亮、暗色两套，“设置 → 外观”里选，默认跟随系统 ================= */
 :root{
+  color-scheme:light;
   --bg:#F5F4F0; --surface:#FFFFFF; --sunken:#EFEDE8; --ink:#15171C; --ink-2:#3C4048; --muted:#7A7F87; --faint:#A9ADB3;
   --line:#E6E3DC; --line-2:#EFECE6; --accent:#0E5A4B; --accent-ink:#FFFFFF; --accent-soft:#E6F0EC; --accent-2:#147A66;
-  --gold:#A9823F; --gold-soft:#F6EFE0; --down:#B0452F; --down-soft:#F8E9E4; --up:#0E7A5F;
+  --gold:#A9823F; --gold-ink:#FFFFFF; --gold-soft:#F6EFE0; --down:#B0452F; --down-soft:#F8E9E4; --up:#0E7A5F;
+  --xls-bg:#E7F3EC; --xls-ink:#17603A; --pdf-bg:#FBE9E4; --pdf-ink:#A33B25; --bar-err:#FFB4A3;
+  --scrim:rgba(15,17,20,.42); --scrim-2:rgba(15,17,20,.30);
   --shadow:0 1px 2px rgba(20,22,28,.04),0 8px 24px -12px rgba(20,22,28,.10);
   --shadow-lg:0 2px 6px rgba(20,22,28,.06),0 28px 64px -24px rgba(20,22,28,.28);
+  /* 选中的标签、按钮：浮起来一点（上沿一道亮边 + 下面一层投影）；没选中的放在微微凹下去的底槽里 */
+  --raised:inset 0 1px 0 rgba(255,255,255,.9),0 1px 2px rgba(20,22,28,.10),0 3px 8px -3px rgba(20,22,28,.16);
+  --tray:inset 0 1px 2px rgba(20,22,28,.07);
   --r:12px; --r-sm:8px;
   --sans:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;
+  /* 字号放大后，窗口里实际能放下多少（vh、vw 会跟着放大，要除回来） */
+  --vh:calc(100vh / var(--zoom,1)); --vw:calc(100vw / var(--zoom,1));
 }
-@media (prefers-color-scheme: dark){
-  :root{ --bg:#111315; --surface:#1A1D20; --sunken:#15181A; --ink:#ECEDEE; --ink-2:#C9CCD0; --muted:#8C9299; --faint:#5F656C;
-    --line:#2A2E32; --line-2:#22262A; --accent:#5CC2A8; --accent-ink:#0B1F1A; --accent-soft:#17302A; --accent-2:#7AD3BC;
-    --gold:#D2AE6A; --gold-soft:#2C261A; --down:#E58A73; --down-soft:#33201B; --up:#5CC2A8;
-    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.5); --shadow-lg:0 28px 64px -24px rgba(0,0,0,.7); }
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#111315; --surface:#1A1D20; --sunken:#15181A; --ink:#ECEDEE; --ink-2:#C9CCD0; --muted:#8C9299; --faint:#5F656C;
+  --line:#2A2E32; --line-2:#22262A; --accent:#5CC2A8; --accent-ink:#0B1F1A; --accent-soft:#17302A; --accent-2:#7AD3BC;
+  --gold:#D2AE6A; --gold-ink:#1A1408; --gold-soft:#2C261A; --down:#E58A73; --down-soft:#33201B; --up:#5CC2A8;
+  --xls-bg:#17302A; --xls-ink:#7AD3BC; --pdf-bg:#33201B; --pdf-ink:#E58A73; --bar-err:#B0452F;
+  --scrim:rgba(0,0,0,.58); --scrim-2:rgba(0,0,0,.45);
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.5); --shadow-lg:0 28px 64px -24px rgba(0,0,0,.7);
+  --raised:inset 0 1px 0 rgba(255,255,255,.07),0 1px 2px rgba(0,0,0,.45),0 3px 10px -3px rgba(0,0,0,.6);
+  --tray:inset 0 1px 3px rgba(0,0,0,.45);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -35,10 +61,13 @@ button{cursor:pointer;border:0;background:none}
 .brand small{display:block;font-size:11.5px;color:var(--muted);letter-spacing:.12em;margin-top:-1px}
 .mark svg{width:100%;height:100%}
 .nav{display:flex;flex-direction:column;gap:2px}
-.nav button{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--r-sm);color:var(--ink-2);font-size:14px;text-align:left;transition:background .15s,color .15s}
-.nav button:hover{background:var(--sunken)}
-.nav button.on{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:var(--shadow)}
-.nav svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+.nav button{position:relative;display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--r-sm);color:var(--muted);font-size:14px;text-align:left;transition:background .15s,color .15s,box-shadow .15s}
+.nav button:hover{background:var(--sunken);color:var(--ink)}
+/* 当前所在的页：浮起的白卡片 + 左边一道墨绿 + 图标变墨绿 */
+.nav button.on{background:var(--surface);color:var(--ink);font-weight:650;box-shadow:var(--raised)}
+.nav button.on:before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.nav button.on svg{stroke:var(--accent);opacity:1}
+.nav svg{flex:none;width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
 .nav .sep{height:1px;background:var(--line);margin:10px 8px}
 .side .grow{flex:1}
 .lic{margin:0 2px;padding:13px 13px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
@@ -105,7 +134,7 @@ h2{font-size:16px;font-weight:650;letter-spacing:0}
 .step.done i{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .step.cur{color:var(--ink)} .step.cur i{border-color:var(--ink);color:var(--ink)}
 .steps .ln{width:56px;height:1px;background:var(--line);margin:0 14px}
-.wiz{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start}
+.wiz{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start}
 .kv{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line-2);font-size:13.5px}
 .kv:first-of-type{border-top:0}
 .kv span{color:var(--muted)}
@@ -113,19 +142,21 @@ h2{font-size:16px;font-weight:650;letter-spacing:0}
 .note svg{flex:none;width:16px;height:16px;stroke:var(--gold);fill:none;stroke-width:1.7;margin-top:2px}
 .form{display:grid;gap:22px}
 .field label{display:block;font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.02em;margin-bottom:8px}
-.field .hint{font-size:12.5px;color:var(--faint);margin-top:6px}
+.field .hint,.set .hint{font-size:12.5px;color:var(--faint);margin-top:6px}
 .inp{height:40px;width:100%;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:0 12px;outline:none;transition:border-color .15s,box-shadow .15s}
 .inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-.seg{display:inline-flex;padding:3px;background:var(--sunken);border-radius:10px;gap:2px}
-.seg button{height:34px;padding:0 18px;border-radius:8px;font-weight:600;color:var(--muted);font-size:13.5px}
-.seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+/* 几选一的按钮组（方案、主题等）：和标签栏同一种样子——底槽微凹，选中的浮起、字变墨绿 */
+.seg{display:inline-flex;padding:3px;background:var(--sunken);border-radius:10px;gap:2px;box-shadow:var(--tray);max-width:100%;flex-wrap:wrap}
+.seg button{height:34px;padding:0 18px;border-radius:8px;font-weight:600;color:var(--muted);font-size:13.5px;transition:background .15s,color .15s,box-shadow .15s}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--surface);color:var(--accent);box-shadow:var(--raised)}
 .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{display:flex;align-items:center;border:1px solid var(--line);border-radius:9px;background:var(--surface);overflow:hidden;height:38px}
 .chip span{padding:0 10px 0 12px;font-size:13.5px}
 .chip input{width:50px;height:100%;border:0;border-left:1px solid var(--line-2);text-align:center;background:var(--sunken);outline:none;font-weight:600}
 .chip.warn{border-color:var(--gold)} .chip.warn input{background:var(--gold-soft)}
-.cls6{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.cls6{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
 .mini{border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:7px 8px 6px;text-align:center}
 .mini small{display:block;font-size:11.5px;color:var(--muted);white-space:nowrap}
 .mini input{width:100%;border:0;text-align:center;background:none;outline:none;font-weight:600;font-size:15px}
@@ -141,16 +172,26 @@ h2{font-size:16px;font-weight:650;letter-spacing:0}
 .kpi .v{font-size:34px;font-weight:650;letter-spacing:-.03em;line-height:1.15;margin-top:6px}
 .kpi .v small{font-size:14px;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:4px}
 .kpi .d{font-size:12.5px;color:var(--muted);margin-top:2px}
-.tabs{display:flex;gap:26px;border-bottom:1px solid var(--line);margin-bottom:20px}
-.tabs button{padding:10px 0 11px;color:var(--muted);font-weight:600;font-size:14px;position:relative}
-.tabs button.on{color:var(--ink)}
-.tabs button.on:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--ink);border-radius:2px}
+/* 标签栏（结果页、设置页）：没选中的平放在底槽里、字是灰的；选中的浮起成白卡片，字变墨绿，底下一道短横线。
+   下面一行 .tabhint 说明当前标签里是什么 */
+.tabbar{display:flex;gap:3px;padding:4px;background:var(--sunken);border-radius:12px;box-shadow:var(--tray);width:fit-content;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.tabbar::-webkit-scrollbar{display:none}
+.tabbar [role=tab]{position:relative;flex:none;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 15px;border-radius:9px;color:var(--muted);font-weight:600;font-size:14px;white-space:nowrap;transition:background .15s,color .15s,box-shadow .15s}
+.tabbar [role=tab]:hover{color:var(--ink);background:color-mix(in srgb,var(--surface) 55%,transparent)}
+.tabbar [role=tab][aria-selected=true]{background:var(--surface);color:var(--accent);box-shadow:var(--raised)}
+.tabbar [role=tab][aria-selected=true]:after{content:"";position:absolute;left:50%;bottom:4px;width:16px;height:2px;margin-left:-8px;border-radius:2px;background:var(--accent)}
+.tabbar [role=tab] .dot{width:6px;height:6px;border-radius:50%;background:var(--gold);display:none}
+.tabbar [role=tab].dirty .dot{display:block}
+.tabhint{display:flex;gap:8px;align-items:flex-start;margin:10px 2px 20px;color:var(--muted);font-size:13px;line-height:1.6}
+.tabhint svg{flex:none;width:15px;height:15px;margin-top:2px;stroke:var(--accent);fill:none;stroke-width:1.7;stroke-linecap:round}
+.tabhint b{color:var(--ink-2);font-weight:650;margin-right:4px}
 .pane{display:none} .pane.on{display:block;animation:fade .2s ease}
+.spane{display:none} .spane.on{display:block;animation:fade .2s ease}
 .two{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
 .rk{display:grid;grid-template-columns:30px 44px 1fr 62px;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line-2)}
 .rk:first-of-type{border-top:0}
 .rk .no{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:700;background:var(--sunken);color:var(--ink-2)}
-.rk.first .no{background:var(--gold);color:#fff}
+.rk.first .no{background:var(--gold);color:var(--gold-ink)}
 .rk .nm{font-weight:650;font-size:15px}
 .rk .tr{height:8px;border-radius:8px;background:var(--sunken);overflow:hidden}
 .rk .tr i{display:block;height:100%;border-radius:8px;background:var(--accent);opacity:.85}
@@ -170,17 +211,18 @@ td.b{font-weight:650} td.m{color:var(--muted)}
 td .s{display:block;font-size:11.5px;color:var(--faint);margin-top:-2px}
 .hi{color:var(--accent);font-weight:650} .lo{color:var(--down);font-weight:650}
 .pill{display:inline-grid;place-items:center;min-width:24px;height:24px;border-radius:999px;background:var(--sunken);font-weight:700;font-size:12px;padding:0 7px}
-.pill.g{background:var(--gold);color:#fff}
-.scroll{max-height:462px;overflow:auto;border-radius:var(--r)}
+.pill.g{background:var(--gold);color:var(--gold-ink)}
+.scroll{max-height:clamp(300px,calc(var(--vh) - 230px),640px);overflow:auto;border-radius:var(--r)}
 .tools{display:flex;gap:10px;align-items:center;margin-bottom:12px}
 .search{position:relative;width:240px}
 .search svg{position:absolute;left:11px;top:11px;width:16px;height:16px;stroke:var(--faint);fill:none;stroke-width:1.7}
 .search input{padding-left:34px;height:38px}
-.fchips{display:flex;gap:6px}
-.fchips button{height:32px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:600;color:var(--ink-2)}
-.fchips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.fchips{display:flex;gap:6px;flex-wrap:wrap}
+.fchips button{height:32px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:600;color:var(--muted);transition:background .15s,color .15s,border-color .15s}
+.fchips button:hover{color:var(--ink);border-color:var(--faint)}
+.fchips button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);box-shadow:0 2px 6px -2px color-mix(in srgb,var(--accent) 60%,transparent)}
 .count{color:var(--muted);font-size:13px}
-.tgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,500px),1fr));gap:14px}
 .tcard h3{font-size:14px;font-weight:650;padding:15px 18px 4px;display:flex;gap:8px;align-items:baseline}
 .tcard h3 small{color:var(--muted);font-weight:500;font-size:12px}
 .band{display:grid;grid-template-columns:150px 1fr 46px;gap:14px;align-items:center;padding:9px 0}
@@ -194,14 +236,14 @@ td .s{display:block;font-size:11.5px;color:var(--faint);margin-top:-2px}
 /* 导出 */
 .exp{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;align-items:start;position:relative}
 .xico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:13px;letter-spacing:.02em;margin-bottom:14px}
-.xico.x{background:#E7F3EC;color:#17603A} .xico.p{background:#FBE9E4;color:#A33B25}
-@media (prefers-color-scheme: dark){.xico.x{background:#17302A;color:#7AD3BC}.xico.p{background:#33201B;color:#E58A73}}
+.xico.x{background:var(--xls-bg);color:var(--xls-ink)} .xico.p{background:var(--pdf-bg);color:var(--pdf-ink)}
 .ul{margin:12px 0 18px;display:grid;gap:6px;color:var(--ink-2);font-size:13.5px}
 .ck{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line-2);cursor:pointer}
 .ck:first-of-type{border-top:0}
-.ck input{display:none}
+.ck input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}      /* 藏起来但还能用键盘勾选 */
+.ck input:focus-visible+.box{outline:2px solid var(--accent);outline-offset:2px}
 .ck .box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--faint);display:grid;place-items:center;transition:.15s;flex:none}
-.ck .box svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:2.4;opacity:0}
+.ck .box svg{width:12px;height:12px;stroke:var(--accent-ink);fill:none;stroke-width:2.4;opacity:0}
 .ck input:checked+.box{background:var(--accent);border-color:var(--accent)} .ck input:checked+.box svg{opacity:1}
 .ck b{font-weight:600} .ck span{color:var(--muted);font-size:12.5px;margin-left:auto}
 .lock{display:none;position:absolute;inset:-8px;border-radius:18px;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:blur(3px);place-items:center;z-index:3}
@@ -218,9 +260,9 @@ body.end .lock{display:grid}
 .wt .mini b{font-size:20px;font-weight:650;display:block;margin-top:2px}
 
 /* 弹窗 */
-.mask{display:none;position:fixed;inset:0;background:rgba(15,17,20,.42);backdrop-filter:blur(4px);place-items:center;z-index:20}
+.mask{display:none;position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(4px);place-items:center;z-index:20;padding:16px;overflow:auto}
 .mask.on{display:grid;animation:fade .18s ease}
-.modal{width:520px;background:var(--surface);border-radius:18px;box-shadow:var(--shadow-lg);padding:30px 32px 26px;border:1px solid var(--line)}
+.modal{width:520px;max-width:calc(var(--vw) - 32px);max-height:calc(var(--vh) - 32px);overflow:auto;background:var(--surface);border-radius:18px;box-shadow:var(--shadow-lg);padding:30px 32px 26px;border:1px solid var(--line)}
 .modal h2{font-size:21px;letter-spacing:-.01em;margin-bottom:6px}
 .code{display:flex;align-items:center;gap:10px;margin:8px 0 4px;padding:12px 14px;border-radius:11px;background:var(--sunken);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:17px;letter-spacing:.12em;font-weight:600}
 .code .sp{flex:1}
@@ -242,6 +284,8 @@ textarea.inp{height:86px;padding:10px 12px;resize:none;font-family:ui-monospace,
 .notes .note{margin-top:0}
 .busy{position:fixed;inset:0;display:none;place-items:center;background:color-mix(in srgb,var(--bg) 60%,transparent);z-index:40}
 .busy.on{display:grid}
+.busy small{display:block;font-weight:500;font-size:12.5px;color:var(--muted);margin-top:1px;max-width:300px}
+.busy small:empty{display:none}
 .busy div{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);padding:14px 20px;border-radius:12px;box-shadow:var(--shadow-lg);font-weight:600}
 .spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--accent);animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -260,7 +304,7 @@ textarea.inp{height:86px;padding:10px 12px;resize:none;font-family:ui-monospace,
 .msgerr{color:var(--down);font-size:13px;margin-top:8px;min-height:18px}
 .lic.open{display:none}
 /* 任课总表编辑器 */
-#ted .modal{width:900px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;padding:28px 30px 22px}
+#ted .modal{width:900px;max-width:calc(var(--vw) - 32px);max-height:calc(var(--vh) - 32px);overflow:hidden;display:flex;flex-direction:column;padding:28px 30px 22px}
 #ted .body{overflow:auto;margin:16px -6px 0;padding:0 6px;flex:1}
 .tt{width:100%;border-collapse:separate;border-spacing:0 6px} .tt th{position:static;background:none;border:0;text-align:left;padding:0 6px 2px;font-size:12px}
 .tt td{border:0;padding:0 4px 0 0;text-align:left} .tt td:last-child{width:34px;padding:0}
@@ -278,10 +322,9 @@ textarea.inp{height:86px;padding:10px 12px;resize:none;font-family:ui-monospace,
 .help dl{display:grid;grid-template-columns:120px 1fr;gap:10px 18px;margin-top:6px} .help dt{font-weight:650} .help dd{color:var(--ink-2);line-height:1.7}
 .help .qa b{display:block;margin-top:14px}
 .toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px} .toc a{height:30px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:600;color:var(--ink-2);display:inline-flex;align-items:center;cursor:pointer} .toc a:hover{border-color:var(--accent);color:var(--accent)}
-:not(th)[data-tip]{position:relative}
 /* 班级详情：从右边滑出的面板 */
-.dmask{position:fixed;inset:0;background:rgba(15,17,20,.30);opacity:0;pointer-events:none;transition:opacity .2s;z-index:14} .dmask.on{opacity:1;pointer-events:auto}
-.drawer{position:fixed;top:0;right:0;bottom:0;width:640px;max-width:94vw;background:var(--bg);border-left:1px solid var(--line);box-shadow:var(--shadow-lg);transform:translateX(104%);transition:transform .26s ease;z-index:15;overflow:auto;padding:28px 30px 44px}
+.dmask{position:fixed;inset:0;background:var(--scrim-2);opacity:0;pointer-events:none;transition:opacity .2s;z-index:14} .dmask.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:640px;max-width:var(--vw);background:var(--bg);border-left:1px solid var(--line);box-shadow:var(--shadow-lg);transform:translateX(104%);transition:transform .26s ease;z-index:15;overflow:auto;padding:28px 30px 44px}
 .drawer.on{transform:none}
 .drawer h1{font-size:34px;margin:2px 0 10px} .drawer h2{margin:26px 0 10px}
 .drawer .x{position:absolute;top:22px;right:22px;width:34px;height:34px;border-radius:10px;font-size:20px;color:var(--muted)} .drawer .x:hover{background:var(--sunken);color:var(--ink)}
@@ -291,11 +334,14 @@ textarea.inp{height:86px;padding:10px 12px;resize:none;font-family:ui-monospace,
 .names{display:flex;flex-wrap:wrap;gap:6px} .names .tag{font-weight:500}
 /* 对比 */
 .cmpbar{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-.cmpbar select{height:38px;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:0 12px;min-width:320px;outline:none}
+.cmpbar{flex-wrap:wrap} .cmpbar select{height:38px;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:0 12px;min-width:min(320px,100%);max-width:100%;outline:none}
 .arrow{color:var(--faint);margin:0 6px}
-/* 鼠标停留的说明 */
-[data-tip]:hover:after{content:attr(data-tip);position:absolute;left:50%;top:calc(100% + 6px);transform:translateX(-50%);width:max-content;max-width:260px;white-space:normal;text-align:left;background:var(--ink);color:var(--bg);font-size:12.5px;font-weight:500;line-height:1.55;letter-spacing:0;padding:8px 11px;border-radius:9px;z-index:30;box-shadow:var(--shadow-lg);text-transform:none}
-th[data-tip]{cursor:help} th[data-tip]:hover:after{left:auto;right:0;transform:none}
+/* 名词解释：带 ? 的地方，鼠标停一下、点一下或用键盘选中都会弹出说明（触屏也能看） */
+.qi{display:inline-grid;place-items:center;width:15px;height:15px;margin-left:4px;border-radius:50%;border:1px solid var(--faint);color:var(--muted);font-size:10px;font-weight:700;line-height:1;vertical-align:1px;cursor:help;text-decoration:none;font-style:normal}
+.qi:hover,.qi:focus-visible{border-color:var(--accent);color:var(--accent)}
+#tip{position:fixed;left:0;top:0;z-index:60;max-width:280px;padding:9px 12px;border-radius:10px;background:var(--ink);color:var(--bg);font-size:12.5px;font-weight:500;line-height:1.6;box-shadow:var(--shadow-lg);pointer-events:none;opacity:0;transform:translateY(-3px);transition:opacity .12s,transform .12s;white-space:normal;text-align:left}
+#tip.on{opacity:1;transform:none}
+#tip b{display:block;font-weight:650;margin-bottom:1px}
 /* 字号：整体放大 */
 body{zoom:var(--zoom,1)} .app{height:calc(100vh / var(--zoom,1))}
 /* 最近的考试：改名、删除 */
@@ -311,7 +357,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
 .savebar{position:sticky;bottom:18px;margin-top:26px;display:none;align-items:center;gap:12px;padding:11px 12px 11px 20px;border-radius:14px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow-lg);z-index:5;font-weight:600}
 .savebar.on{display:flex;animation:fade .2s ease}
 .savebar .btn.sec{background:transparent;color:var(--bg);border-color:color-mix(in srgb,var(--bg) 35%,transparent)} .savebar .btn.pri{background:var(--bg);color:var(--ink)}
-.savebar .err{color:#FFB4A3;font-weight:500;font-size:13px;flex:1}
+.savebar .err{color:var(--bar-err);font-weight:500;font-size:13px;flex:1}
 /* 导出完成后的操作 */
 .xdone{display:none;align-items:center;gap:8px;margin-top:14px;padding:9px 10px 9px 14px;border-radius:10px;background:var(--accent-soft);font-size:13px}
 .xdone.on{display:flex;animation:fade .2s ease}
@@ -338,6 +384,66 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
 .aline{margin-top:12px;font-size:13.5px;color:var(--ink-2);line-height:2.1}
 .aline input{width:58px;height:30px;border:1px solid var(--line);border-radius:7px;background:var(--surface);text-align:center;outline:none;font-weight:600;margin:0 2px}
 .aline input:focus,.chip input:focus{box-shadow:inset 0 0 0 2px var(--accent-soft)}
+
+/* ================= 键盘操作：Tab 键走到哪里，哪里就有一圈墨绿的框 ================= */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.inp:focus-visible,.tt input:focus-visible,.chip input:focus-visible,.aline input:focus-visible,.mini input:focus-visible,.cmpbar select:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.li:focus-visible{outline-offset:-2px} .li:focus-within .acts{opacity:1}
+.drop:focus-visible{outline-offset:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Windows 上的滚动条：细一点，颜色跟着主题（Mac 用系统自己的） */
+html.win ::-webkit-scrollbar{width:11px;height:11px}
+html.win ::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--faint) 60%,transparent);border-radius:11px;border:3px solid transparent;background-clip:padding-box}
+html.win ::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
+html.win ::-webkit-scrollbar-track,html.win ::-webkit-scrollbar-corner{background:transparent}
+
+/* ================= 设置 → 外观 ================= */
+.seg button svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;margin-right:7px;vertical-align:-3px}
+.zoomer{display:inline-flex;align-items:stretch;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow)}
+.zoomer button{width:48px;height:38px;color:var(--ink-2);font-weight:700;display:inline-flex;align-items:baseline;justify-content:center;gap:1px;padding-top:9px;transition:background .15s,color .15s}
+.zoomer button:hover:not([disabled]){background:var(--sunken);color:var(--accent)}
+.zoomer button[disabled]{color:var(--faint);cursor:not-allowed}
+.zoomer button span{font-size:12px} .zoomer button span.big{font-size:17px}
+.zoomer output{min-width:70px;display:grid;place-items:center;font-weight:650;font-size:15px;border-left:1px solid var(--line-2);border-right:1px solid var(--line-2)}
+.lookrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.lookrow+.lookrow{margin-top:20px}
+.lookrow>label{width:52px;flex:none;font-size:13px;color:var(--muted);font-weight:600}
+.lookhint{font-size:12.5px;color:var(--faint)}
+kbd{font:inherit;font-size:11.5px;padding:1px 6px;border-radius:5px;border:1px solid var(--line);border-bottom-width:2px;background:var(--surface);color:var(--ink-2)}
+
+/* ================= 窗口小、字号大的时候：一步步收紧（data-w 由脚本按“实际能放下多宽”设定） ================= */
+.two>*,.wiz>*,.exp>*,.tgrid>*,.grid2>*,.kpis>*,.set>*{min-width:0}
+html[data-w=mid] .page{padding:30px 30px 52px}
+html[data-w=mid] .wiz{grid-template-columns:250px minmax(0,1fr)}
+html[data-w=mid] .set{grid-template-columns:160px minmax(0,1fr)}
+html:not([data-w=wide]) #cp .two{grid-template-columns:minmax(0,1fr)}
+html[data-w=mid] .kpi .v{font-size:30px}
+/* 很窄：侧栏只留图标，各块上下排 */
+html[data-w=narrow] .app{grid-template-columns:64px minmax(0,1fr)}
+html[data-w=narrow] .side{padding:18px 8px 14px}
+html[data-w=narrow] .brand{justify-content:center;padding:2px 0 18px} html[data-w=narrow] .brand>div:last-child{display:none}
+html[data-w=narrow] .nav button{justify-content:center;padding:11px 0;font-size:0;gap:0}
+html[data-w=narrow] .nav .sep{margin:10px 6px}
+html[data-w=narrow] .lic:not(.open){padding:10px 0;display:grid;place-items:center;cursor:pointer}
+html[data-w=narrow] .lic .k,html[data-w=narrow] .lic .bar,html[data-w=narrow] .lic a,html[data-w=narrow] #licText{display:none}
+html[data-w=narrow] .lic .v{margin:0}
+html[data-w=narrow] .demo{display:none}
+html[data-w=narrow] .page{padding:24px 20px 44px}
+html[data-w=narrow] h1{font-size:25px}
+html[data-w=narrow] .wiz,html[data-w=narrow] .two,html[data-w=narrow] .exp,html[data-w=narrow] .grid2,html[data-w=narrow] .set{grid-template-columns:minmax(0,1fr)}
+html[data-w=narrow] .set{gap:12px}
+html[data-w=narrow] .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+html[data-w=narrow] .kpi .v{font-size:28px}
+html[data-w=narrow] .li{grid-template-columns:minmax(0,1fr) auto 64px;gap:12px;padding:13px 16px}
+html[data-w=narrow] .li>span:nth-child(2),html[data-w=narrow] .li>span:nth-child(3){display:none}
+html[data-w=narrow] .drop{padding:34px 18px}
+html[data-w=narrow] .steps .ln{width:20px;margin:0 8px}
+html[data-w=narrow] .tools{flex-wrap:wrap} html[data-w=narrow] .search{width:100%}
+html[data-w=narrow] .head{flex-wrap:wrap}
+html[data-w=narrow] .drawer{padding:22px 18px 40px} html[data-w=narrow] .dk{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+html[data-w=narrow] .band{grid-template-columns:110px minmax(0,1fr) 40px}
+html[data-w=narrow] .help dl{grid-template-columns:minmax(0,1fr)} html[data-w=narrow] .help dd{margin-bottom:6px}
 </style>
 </head>
 <body>
@@ -354,11 +460,11 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
       <button data-p="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8M12 16.6v.3"/></svg>帮助</button>
     </nav>
     <div class="grow"></div>
-    <div class="lic open" id="lic">
+    <div class="lic open" id="lic" tabindex="0" role="button" aria-label="使用许可">
       <div class="k">使用许可</div>
       <div class="v"><span class="dot"></span><span id="licText"></span></div>
       <div class="bar" id="licBar"><i></i></div>
-      <a id="licLink" onclick="openAct()"></a>
+      <a id="licLink"></a>
     </div>
     <div class="demo" id="ver"></div>
   </aside>
@@ -426,10 +532,12 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
           <button class="btn pri" onclick="go('export')"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>导出</button>
         </div>
         <div class="kpis" id="kpis"></div>
-        <div class="tabs" id="tabs">
-          <button data-t="ov" class="on">概览</button><button data-t="st">班级结构分</button><button data-t="cl">各班统计</button>
-          <button data-t="te">教师排名</button><button data-t="de">成绩明细</button><button data-t="ba">分数段</button><button data-t="ne">临界生</button><button data-t="cp">和上次比</button>
+        <div class="tabbar" id="tabs" role="tablist" aria-label="结果的各个部分">
+          <button role="tab" data-t="ov">概览</button><button role="tab" data-t="st">班级结构分</button><button role="tab" data-t="cl">各班统计</button>
+          <button role="tab" data-t="te">教师排名</button><button role="tab" data-t="de">成绩明细</button><button role="tab" data-t="ba">分数段</button>
+          <button role="tab" data-t="ne">临界生</button><button role="tab" data-t="cp">和上次比</button>
         </div>
+        <p class="tabhint" id="tabHint"></p>
         <div class="pane on" id="ov"><div class="two">
           <div class="card pad"><div class="row" style="margin-bottom:8px"><h2 id="ovTitle">班级结构分</h2><div class="sp"></div><span class="tag" id="ovTag"></span></div><div id="ovRank"></div></div>
           <div class="card pad"><div class="row" style="margin-bottom:14px"><h2>主要结论</h2><div class="sp"></div><span class="tag g">自动起草 · 请审核</span></div><ul class="find" id="ovFind"></ul><div class="notes" id="ovNotes"></div></div>
@@ -498,12 +606,20 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
     <!-- ================= 设置 ================= -->
     <section class="page" id="settings">
       <div class="eyebrow">设置</div>
-      <h1>学校与算法 <span class="saved" id="saved" style="font-size:14px;letter-spacing:0;margin-left:10px">已保存</span></h1>
-      <p class="sub" style="margin-bottom:18px">一般一学期改一次。改完点下方的“保存”。</p>
+      <h1>学校、算法与外观 <span class="saved" id="saved" style="font-size:14px;letter-spacing:0;margin-left:10px">已保存</span></h1>
+      <p class="sub" style="margin-bottom:18px">学校、科目、算法一般一学期改一次，改完点下方的“保存”；外观的改动立即生效。</p>
+      <div class="tabbar" id="stabs" role="tablist" aria-label="设置的各个部分">
+        <button role="tab" data-s="school">学校与科目<span class="dot"></span></button><button role="tab" data-s="algo">分数线与算法<span class="dot"></span></button>
+        <button role="tab" data-s="teacher">任课总表<span class="dot"></span></button><button role="tab" data-s="look">外观</button><button role="tab" data-s="lic" id="stabLic">使用许可</button>
+      </div>
+      <p class="tabhint" id="stabHint"></p>
+      <div class="spane" data-s="school" role="tabpanel">
       <div class="set"><div><h2>学校</h2><p class="d">印在发布版上。落款里的“{年级}”会自动换成七年级、八年级、九年级。</p></div>
         <div><div class="grid2"><div class="field"><label>学校名称</label><input class="inp" id="sSchool"></div><div class="field"><label>落款</label><input class="inp" id="sOrg"></div></div></div></div>
       <div class="set"><div><h2>科目与满分</h2><p class="d">这里是默认值，每次核算时还可以临时改。黄色的是还没定的。登分表里新加的科目，算过一次会自动出现在这里。</p></div><div class="chips" id="setChips"></div></div>
       <div class="set"><div><h2>各年级科目</h2><p class="d">空白登分表模板按这个生成</p></div><div id="gs" style="display:grid;gap:8px"></div></div>
+      </div>
+      <div class="spane" data-s="algo" role="tabpanel">
       <div class="set"><div><h2>分数线</h2><p class="d">多少分算及格、优秀；临界生看升学线上下多少分。</p></div>
         <div><div class="chips" id="lineChips"></div><div class="hint" id="lineHint"></div></div></div>
       <div class="set"><div><h2>算法</h2><p class="d">各项占多少，可以按自己学校的办法改。改了之后新算的考试按新的比例；以前算过的考试不变。</p></div>
@@ -518,12 +634,25 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
             <div class="aline">前 10 名加分：全级前 10 名每有一人，给本班加 <input data-p="前10名每人加分" inputmode="decimal"> 分（填 0 就是不加）</div></div>
           <div class="row" style="margin-top:14px"><button class="btn ghost" id="algoReset" style="padding:0">分数线和算法恢复成默认</button></div>
         </div></div>
+      </div>
+      <div class="spane" data-s="teacher" role="tabpanel">
       <div class="set"><div><h2>任课总表</h2><p class="d">教师、任教班级、各班应考人数。没有它也能算，只是不出教师排名。</p></div>
         <div class="row" style="flex-wrap:wrap"><span class="tag" id="tInfo"></span><div class="sp"></div><button class="btn pri" id="tEdit">在这里编辑</button><button class="btn sec" id="tOpen">用 Excel 打开</button><button class="btn sec" id="tPick">导入一份</button><input type="file" id="tFile" accept=".xlsx" class="hide"><button class="btn ghost" onclick="downloadTemplate('任课总表')">下载空白模板</button></div></div>
-      <div class="set"><div><h2>显示</h2><p class="d">字看着小，就调大一点</p></div>
-        <div class="row"><div class="seg" id="fontSeg"><button data-f="标准">标准</button><button data-f="大">大</button><button data-f="特大">特大</button></div></div></div>
+      </div>
+      <div class="spane" data-s="look" role="tabpanel">
+      <div class="set"><div><h2>主题</h2><p class="d">“跟随系统”会随电脑的明暗模式自动切换。只在这台电脑上生效。</p></div>
+        <div><div class="seg" id="themeSeg" role="radiogroup" aria-label="主题"><button role="radio" data-v="跟随系统"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="11.5" rx="1.5"/><path d="M9 20h6M12 16v4"/></svg>跟随系统</button><button role="radio" data-v="明亮"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>明亮</button><button role="radio" data-v="暗色"><svg viewBox="0 0 24 24"><path d="M19.5 14.5A7.5 7.5 0 0 1 9.5 4.5a7.5 7.5 0 1 0 10 10z"/></svg>暗色</button></div></div></div>
+      <div class="set"><div><h2>字号</h2><p class="d">整个界面一起放大或缩小，表格、按钮都跟着变。字看着小，就调大一点。</p></div>
+        <div><div class="lookrow"><div class="zoomer"><button id="zoomOut" title="缩小字号" aria-label="缩小字号"><span>A</span>−</button><output id="zoomVal" aria-live="polite">100%</output><button id="zoomIn" title="放大字号" aria-label="放大字号"><span class="big">A</span>+</button></div>
+          <button class="btn sec" id="zoomReset">恢复标准字号</button></div>
+          <p class="lookhint" style="margin-top:12px">也可以用键盘：<kbd class="mod">Ctrl</kbd> + <kbd>+</kbd> 放大，<kbd class="mod">Ctrl</kbd> + <kbd>−</kbd> 缩小，<kbd class="mod">Ctrl</kbd> + <kbd>0</kbd> 恢复标准字号。</p></div></div>
+      <div class="set"><div><h2>恢复默认外观</h2><p class="d">主题回到“跟随系统”，字号回到 100%。学校、算法等其他设置不受影响。</p></div>
+        <div class="lookrow"><button class="btn sec" id="lookReset">恢复默认外观</button><span class="lookhint" id="lookNow"></span></div></div>
+      </div>
+      <div class="spane" data-s="lic" role="tabpanel">
       <div class="set" id="setLicRow"><div><h2>使用许可</h2><p class="d">一台电脑一个激活码</p></div>
         <div><div class="row"><span class="tag" id="setLic"></span><span class="count" id="setMachine"></span><div class="sp"></div><button class="btn sec" onclick="openAct()">输入激活码</button></div><div class="contactBox"></div></div></div>
+      </div>
       <div class="savebar" id="savebar"><span>有修改还没有保存</span><span class="err" id="saveErr"></span><div class="sp"></div><button class="btn sec" id="discardBtn">放弃修改</button><button class="btn pri" id="saveBtn">保存</button></div>
     </section>
     <!-- ================= 帮助 ================= -->
@@ -579,7 +708,9 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
         <b>没有生成 PDF？</b><p>电脑上需要有 Edge 或 Chrome 浏览器（Windows 10、11 自带 Edge）。Excel 不受影响。</p>
         <b>改了一个分数想重算？</b><p>重新导入再算一遍。用同一个考试名称会覆盖原来的结果（会提醒）；想两份都留，换个名称。</p>
         <b>删错了考试？</b><p>删除的考试在结果文件夹的“已删除”里，把那个文件夹拖回上一层就恢复了。</p>
-        <b>换电脑？</b><p>把数据文件夹整个拷过去就行；激活码要按新电脑的机器码重新申请。</p></div>
+        <b>换电脑？</b><p>把数据文件夹整个拷过去就行；激活码要按新电脑的机器码重新申请。</p>
+        <b>字太小，或者想换成深色？</b><p>在“设置 → 外观”里调字号、换主题，马上生效。也可以按住 Ctrl（Mac 上是 ⌘）再按 + 或 −，按 0 恢复标准字号。</p>
+        <b>表头旁边的“?”是什么？</b><p>点一下会说明这个词是什么意思、怎么算的。</p></div>
 
       <h2 id="h8">联系作者</h2>
       <p>用着有问题、有建议，或者想了解更多，欢迎联系：</p>
@@ -649,10 +780,13 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
   <div class="field"><label>学校名称 <span style="font-weight:400;color:var(--faint)">（印在导出的结果上，以后可以在“设置”里改）</span></label><input class="inp" id="wSchool" placeholder="如：××县××中学"></div>
   <div class="row" style="margin-top:24px"><button class="btn ghost" id="wSkip" style="padding:0">以后再填</button><div class="sp"></div><button class="btn pri lg" id="wOk">开始使用</button></div>
 </div></div>
-<div class="busy" id="busy"><div><span class="spin"></span><span id="busyText">正在计算…</span></div></div>
+<div class="busy" id="busy" role="status" aria-live="polite"><div><span class="spin"></span><div><span id="busyText">正在计算…</span><small id="busyMore"></small></div></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
+// 界面脚本，按页面分段，搜“// ----------”可以跳到各段：
+//   与本地服务通信 · 标签栏 · 许可 · 开始页 · 外观（主题、字号、窗口宽窄） · 核算向导 · 结果 · 班级详情 · 和上次比
+//   · 导出 · 设置 · 任课总表编辑器 · 帮助 · 新版本 · 说明气泡 · 弹窗与键盘
 const TOKEN = "__TOKEN__";
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
@@ -672,8 +806,13 @@ async function post(name, body, query){
   return j.data;
 }
 async function call(name, body){ try { return await post(name, body); } catch (e) { toast(e.message); } }
-function busy(t){ $("#busyText").textContent = t || "请稍候…"; $("#busy").classList.add("on"); }
-function idle(){ $("#busy").classList.remove("on"); }
+// 等待中：转圈 + 说明在做什么；超过 3 秒显示已用了几秒，免得以为卡住了
+function busy(t, more){
+  $("#busyText").textContent = t || "请稍候…"; $("#busyMore").textContent = ""; $("#busy").classList.add("on");
+  const t0 = Date.now(); clearInterval(busy.t);
+  busy.t = setInterval(() => { const n = Math.round((Date.now() - t0) / 1000); if (n >= 3) $("#busyMore").textContent = `已用 ${n} 秒` + (more ? "。" + more : ""); }, 1000);
+}
+function idle(){ clearInterval(busy.t); $("#busy").classList.remove("on"); }
 function toast(t, ms){ const e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove("on"), ms || 2600); }
 // 小对话框：确认、输入。返回 {action: "ok" | "alt" | "cancel", value}
 function dialog({title, text = "", input = null, ok = "确定", alt = "", cancel = "取消", danger = false, check = null}){
@@ -696,11 +835,56 @@ async function go(p){
     if (r.action === "ok" && !(await saveSettings())) return;
     setDirty(false);
   }
-  $$(".page").forEach(x => x.classList.toggle("on", x.id === p)); $$("#nav button").forEach(b => b.classList.toggle("on", b.dataset.p === p)); $(".main").scrollTop = 0;
-  if (p === "settings") loadSettings(); if (p === "home") refresh();
+  $$(".page").forEach(x => x.classList.toggle("on", x.id === p));
+  $$("#nav button").forEach(b => { b.classList.toggle("on", b.dataset.p === p); b.toggleAttribute("aria-current", b.dataset.p === p); });
+  $(".main").scrollTop = 0;
+  if (p === "settings") { pickSetTab(setTab); loadSettings(); }
+  if (p === "home") refresh();
 }
 $$("#nav button").forEach(b => b.onclick = () => go(b.dataset.p));
-$$("#tabs button").forEach(b => b.onclick = () => { $$("#tabs button").forEach(x => x.classList.toggle("on", x === b)); $$(".pane").forEach(x => x.classList.toggle("on", x.id === b.dataset.t)); });
+// 侧栏每一项停一下会说明是做什么的（窄窗口里只剩图标时，靠它认）
+const NAV_TIP = {home: "导入登分表，打开最近的考试", wizard: "确认科目、满分和方案，开始计算", result: "各班统计、结构分、教师排名、学生名单",
+  export: "导出带公式的 Excel 和发布版 PDF", settings: "学校、科目、算法、任课总表和外观", help: "怎么用、怎么算、联系作者"};
+$$("#nav button").forEach(b => { b.dataset.tip = NAV_TIP[b.dataset.p]; b.dataset.tipTitle = b.textContent.trim(); b.dataset.tipPos = "right"; });
+
+// ---------- 标签栏：点一下或用左右方向键切换。选中的标签浮起、变墨绿；下面一行说明这个标签里是什么；
+//            没选中的标签停一下，也会先说明里面是什么
+const INFO = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.8v.2"/></svg>';
+function tabbar(bar, key, hintEl, hintOf, onPick){
+  const tabs = () => [...bar.querySelectorAll("[role=tab]")].filter(t => !t.classList.contains("hide"));
+  const pick = (k, focus) => {
+    const t = tabs().find(x => x.dataset[key] === k) || tabs()[0];
+    tabs().forEach(x => { const on = x === t; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1; x.classList.toggle("on", on);
+      if (on) { delete x.dataset.tip; } else { x.dataset.tip = hintOf(x.dataset[key]); x.dataset.tipTitle = x.textContent.trim(); } });
+    hintEl.innerHTML = `${INFO}<span><b>${esc(t.textContent.trim())}</b>${hintOf(t.dataset[key])}</span>`;
+    if (focus) t.focus();
+    onPick(t.dataset[key]);
+  };
+  bar.addEventListener("click", e => { const t = e.target.closest("[role=tab]"); if (t) pick(t.dataset[key]); });
+  bar.addEventListener("keydown", e => {
+    const L = tabs(), i = L.indexOf(document.activeElement); if (i < 0) return;
+    const j = {ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: L.length - 1}[e.key]; if (j === undefined) return;
+    e.preventDefault(); pick(L[(j + L.length) % L.length].dataset[key], true);
+  });
+  return pick;
+}
+// 结果页的 8 个标签
+const RES_HINT = {
+  ov: () => "这次考试的总体情况：班级排名和自动起草的主要结论（发布前请审核）。",
+  st: () => V && !V.structure.length ? "这个方案没有设置班级结构分。" : "满分 100 的班级评比分，由平均成绩、全科合格率、全科优秀率等几项按比例合成。年级组评比主要看它。",
+  cl: () => "各科单科得分相加得综合得分，按它排名。每一列绿色最高、红色最低。",
+  te: () => "把每位教师所教的全部学生合在一起算单科得分，只在同一学科内排名。",
+  de: () => "每名学生的各科成绩和名次。可以按班级筛选、搜索姓名或考号，点表头排序。",
+  ba: () => "升学线以上的学生按总分分段的人数，仅供参考。",
+  ne: () => `升学线上下 ${V ? num(V.nearRange) : 15} 分以内的学生，含姓名，只在教师范围内使用。`,
+  cp: () => "和同年级的另一次考试比：各班名次、各科得分率、学生名次的进退。"};
+const pickResTab = tabbar($("#tabs"), "t", $("#tabHint"), k => RES_HINT[k](), k => $$(".pane").forEach(x => x.classList.toggle("on", x.id === k)));
+// 设置页的 5 个标签
+const SET_HINT = {school: "学校名称、落款，各科的默认满分，各年级考哪些科目。", algo: "及格线、优秀线、升学线，单科得分和班级结构分各项的比例。改了只影响以后新算的考试。",
+  teacher: "谁教哪个班、各班应考人数。用于教师排名和参考率。", look: "主题颜色和字号。改了立即生效，只在这台电脑上。", lic: "试用、激活状态和这台电脑的机器码。"};
+let setTab = "school";
+const pickSetTab = tabbar($("#stabs"), "s", $("#stabHint"), k => SET_HINT[k], k => { setTab = k; $$(".spane").forEach(x => x.classList.toggle("on", x.dataset.s === k)); });
+pickResTab("ov"); pickSetTab("school");
 
 // ---------- 许可
 function paintLicense(L){
@@ -710,6 +894,7 @@ function paintLicense(L){
   document.body.classList.toggle("end", !L.canExport);
   $("#setLicRow").classList.toggle("hide", open);
   ["#h5", "#helpLic", '.toc a[data-h="h5"]'].forEach(q => $(q).classList.toggle("hide", open));
+  $("#stabLic").classList.toggle("hide", open); if (open && setTab === "lic") pickSetTab("school");
   if (open) return;
   const txt = L.state === "active" ? "已激活" : L.state === "trial" ? `试用中 · 还剩 ${L.daysLeft} 天` : "试用已结束";
   $("#licText").textContent = txt;
@@ -717,11 +902,12 @@ function paintLicense(L){
   $("#licBar i").style.width = Math.max(8, Math.min(100, (L.daysLeft || 0) / (L.trialDays || 3) * 100)) + "%";
   $("#licLink").textContent = L.state === "active" ? "有效期至 " + L.expiry : "输入激活码 →";
   const t = $("#setLic"); t.textContent = L.state === "active" ? "已激活 · 有效期至 " + L.expiry : txt; t.className = "tag " + (L.state === "active" ? "a" : L.state === "expired" ? "d" : "g");
-  $("#setMachine").textContent = "机器码　" + (L.machine || ""); $("#machine").textContent = L.machine || "";
+  $("#setMachine").textContent = "机器码　" + (L.machine || ""); $("#machine").textContent = L.machine || ""; fitWidth();
   $("#lockTitle").textContent = L.message && L.state !== "expired" ? L.message : "试用已结束";
   $$(".contactBox").forEach(b => { b.innerHTML = L.contact ? `<span class="contact">申请激活码请联系：${esc(L.contact)}<button class="btn sec">复制</button></span>` : "";
     const btn = b.querySelector("button"); if (btn) btn.onclick = () => copyText(L.contact.replace(/^\D+/, ""), "已复制：" + L.contact); });
 }
+$("#lic").onclick = () => openAct();
 function openAct(){ $("#actErr").textContent = ""; $("#mask").classList.add("on"); setTimeout(() => $("#code").focus(), 50); }
 function closeAct(){ $("#mask").classList.remove("on"); }
 $("#mask").onclick = e => { if (e.target.id === "mask") closeAct(); };
@@ -741,8 +927,10 @@ async function refresh(){
   $$("#tpls a").forEach(a => a.onclick = ev => { ev.stopPropagation(); downloadTemplate(a.dataset.k); });
   $("#tplT").onclick = ev => { ev.stopPropagation(); downloadTemplate("任课总表"); };
   const KEEP = 5, list = showAllRecent ? ST.recent : ST.recent.slice(0, KEEP);       // 首页只放最近几次，其余的点开再看
-  $("#recent").innerHTML = ST.recent.length ? list.map(r => `<div class="li" data-n="${esc(r.name)}"><div><b>${esc(r.name)}</b></div><span>${esc(r.grade)} · ${esc(r.scheme)}</span><span>${r.n} 人</span><span>${esc(r.date || r.savedAt)}</span><span class="acts"><button class="ren" title="改名">${PEN}</button><button class="del" title="删除">${BIN}</button></span></div>`).join("")
-      + (ST.recent.length > KEEP ? `<div class="li more" id="moreRecent">${showAllRecent ? "收起，只看最近 " + KEEP + " 次" : "查看全部 " + ST.recent.length + " 次考试"}</div>` : "")
+  const acts = `<span class="acts"><button class="ren" title="改名" aria-label="改名">${PEN}</button><button class="del" title="删除" aria-label="删除">${BIN}</button></span>`;
+  $("#recent").innerHTML = ST.recent.length ? list.map(r => `<div class="li" data-n="${esc(r.name)}" tabindex="0" role="button">`
+      + `<div><b>${esc(r.name)}</b></div><span>${esc(r.grade)} · ${esc(r.scheme)}</span><span>${r.n} 人</span><span>${esc(r.date || r.savedAt)}</span>${acts}</div>`).join("")
+      + (ST.recent.length > KEEP ? `<div class="li more" id="moreRecent" tabindex="0" role="button">${showAllRecent ? "收起，只看最近 " + KEEP + " 次" : "查看全部 " + ST.recent.length + " 次考试"}</div>` : "")
     : `<div class="li none">还没有核算过。把登分表拖到上面试试。</div>`;
   if ($("#moreRecent")) $("#moreRecent").onclick = () => { showAllRecent = !showAllRecent; refresh(); };
   $$("#recent .li[data-n]").forEach(d => { const name = d.dataset.n;
@@ -755,7 +943,7 @@ async function refresh(){
       if (r.action === "ok") { if (await call("run_delete", {name})) { if (V && V.exam === name && !V.sample) clearResult(); toast("已删除"); refresh(); } } };
   });
   $("#tryRow").classList.toggle("hide", !ST.hasSample);
-  applyFont(ST.fontSize);
+  if (ST.look) { LOOK.theme = ST.look.theme; LOOK.zoom = ST.look.zoom; applyLook(); }
   $("#cWechat").textContent = ST.contact.wechat; $("#cGithub").textContent = ST.contact.github.replace("https://", "");
   $("#cWechatCopy").onclick = () => copyText(ST.contact.wechat, "已复制微信号：" + ST.contact.wechat);
   $("#cGithubCopy").onclick = () => copyText(ST.contact.github, "已复制网址");
@@ -773,9 +961,45 @@ $("#wSchool").onkeydown = e => { if (e.key === "Enter") $("#wOk").click(); };
 $("#tryBtn").onclick = async ev => { ev.stopPropagation(); busy("正在用示例数据计算…");
   try { V = await post("try_sample"); renderResult(); go("result"); toast("这是虚构的示例数据，随便看、随便导出"); } catch (e) { toast(e.message, 4200); } idle(); };
 // 字号
-const ZOOM = {"标准": 1, "大": 1.12, "特大": 1.25};
-function applyFont(f){ document.documentElement.style.setProperty("--zoom", ZOOM[f] || 1); $$("#fontSeg button").forEach(b => b.classList.toggle("on", b.dataset.f === (ZOOM[f] ? f : "标准"))); }
-$$("#fontSeg button").forEach(b => b.onclick = async () => { applyFont(b.dataset.f); const r = await call("ui_save", {fontSize: b.dataset.f}); if (r && ST) ST.fontSize = r.fontSize; });
+// ---------- 外观：主题（跟随系统 / 明亮 / 暗色）、字号（80%～150%）。改了立即生效，存在本机设置里
+const ZOOMS = [80, 90, 100, 110, 120, 130, 140, 150], sysDark = matchMedia("(prefers-color-scheme: dark)");
+function applyLook(){
+  const R = document.documentElement;
+  R.dataset.theme = LOOK.theme === "暗色" || (LOOK.theme === "跟随系统" && sysDark.matches) ? "dark" : "light";
+  R.style.setProperty("--zoom", LOOK.zoom / 100);
+  $$("#themeSeg button").forEach(b => { const on = b.dataset.v === LOOK.theme; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
+  $("#zoomVal").textContent = LOOK.zoom + "%";
+  $("#zoomOut").disabled = LOOK.zoom <= ZOOMS[0]; $("#zoomIn").disabled = LOOK.zoom >= ZOOMS[ZOOMS.length - 1]; $("#zoomReset").disabled = LOOK.zoom === 100;
+  const plain = LOOK.theme === "跟随系统" && LOOK.zoom === 100;
+  $("#lookReset").disabled = plain; $("#lookNow").textContent = plain ? "现在就是默认外观" : `现在是：${LOOK.theme}，字号 ${LOOK.zoom}%`;
+  fitWidth();
+}
+function saveLook(){ clearTimeout(saveLook.t); saveLook.t = setTimeout(() => call("ui_save", {theme: LOOK.theme, zoom: LOOK.zoom}), 300); }
+function setZoom(z, say){
+  z = Math.max(ZOOMS[0], Math.min(ZOOMS[ZOOMS.length - 1], z)); if (z === LOOK.zoom) return;
+  LOOK.zoom = z; applyLook(); saveLook(); if (say) toast(`字号 ${z}%` + (z === 100 ? "（标准）" : ""), 1400);
+}
+const stepZoom = (d, say) => setZoom(d > 0 ? (ZOOMS.find(z => z > LOOK.zoom) ?? LOOK.zoom) : ([...ZOOMS].reverse().find(z => z < LOOK.zoom) ?? LOOK.zoom), say);
+$$("#themeSeg button").forEach(b => b.onclick = () => { LOOK.theme = b.dataset.v; applyLook(); saveLook(); });
+$("#zoomIn").onclick = () => stepZoom(1); $("#zoomOut").onclick = () => stepZoom(-1); $("#zoomReset").onclick = () => setZoom(100);
+$("#lookReset").onclick = async () => { LOOK.theme = "跟随系统"; LOOK.zoom = 100; applyLook(); clearTimeout(saveLook.t); await call("ui_save", {reset: true}); toast("已恢复默认外观"); };
+sysDark.addEventListener("change", applyLook);
+// Ctrl（Mac 上是 ⌘）加 + / − / 0：放大、缩小、恢复标准字号
+document.addEventListener("keydown", e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  if (e.key === "=" || e.key === "+") { e.preventDefault(); stepZoom(1, true); }
+  else if (e.key === "-" || e.key === "_") { e.preventDefault(); stepZoom(-1, true); }
+  else if (e.key === "0") { e.preventDefault(); setZoom(100, true); }
+});
+if (!document.documentElement.classList.contains("win")) $$("kbd.mod").forEach(k => k.textContent = "⌘");
+// 窗口能放下多宽（字号放大后要除以放大倍数）：宽 / 中 / 窄三档，排版跟着收紧
+function fitWidth(){
+  const w = innerWidth / (LOOK.zoom / 100), R = document.documentElement;
+  R.dataset.w = w >= 1180 ? "wide" : w >= 940 ? "mid" : "narrow";
+  const lic = $("#lic"); if (R.dataset.w === "narrow") { lic.dataset.tip = $("#licText").textContent; lic.dataset.tipPos = "right"; } else delete lic.dataset.tip;
+}
+addEventListener("resize", fitWidth);
+applyLook();
 function clearResult(){ V = null; ["#resBody", "#expBody"].forEach(i => $(i).classList.add("hide")); ["#resEmpty", "#expEmpty"].forEach(i => $(i).classList.remove("hide")); }
 // 下载空白模板：程序窗口里弹出系统的“存储”对话框，自己选位置；浏览器方式下交给浏览器下载
 async function downloadTemplate(key){
@@ -819,8 +1043,6 @@ function buildWizard(){
   $$("#fullChips input").forEach(i => i.oninput = () => i.parentNode.classList.toggle("need", !(Number(i.value) > 0)));
   $$("#fullChips .x").forEach(b => b.onclick = () => { const c = b.parentNode, off = c.classList.toggle("off"); b.textContent = off ? "恢复" : "×"; b.title = off ? "恢复这一科" : "本次不计这一科"; });
   const r = $("#ratio"); r.value = Math.round(I.ratio * 100); r.oninput = () => $("#rv").textContent = r.value + "%"; r.oninput();
-  const cols = `repeat(${Math.min(I.classes.length, 6)},1fr)`;
-  $("#enr").style.gridTemplateColumns = cols; $("#prev").style.gridTemplateColumns = cols;
   $("#enr").innerHTML = I.classes.map(c => `<div class="mini"><small>${esc(c)} · 表内 ${I.listed[c]}</small><input data-c="${esc(c)}" value="${I.enrolled[c] ?? ""}" placeholder="实考 ${I.counts[c]}" inputmode="numeric"></div>`).join("");
   const L = I.last;                                                       // 同年级上次考试：名次、应考人数先带进来，可以改
   $("#prev").innerHTML = I.classes.map(c => `<div class="mini"><small>${esc(c)}</small><input data-c="${esc(c)}" value="${L && L.ranks[c] ? L.ranks[c] : ""}" placeholder="名次" inputmode="numeric"></div>`).join("");
@@ -848,7 +1070,7 @@ $("#run").onclick = async () => {
   if (off.length >= I.subjects.length) { toast("至少要留一门科目"); return; }
   const opts = {scheme: s.name, grade: I.grade, exam: $("#exam").value.trim(), date: $("#date").value.trim(), full: pick("#fullChips .chip:not(.off) input"), exclude: off, ratio: Number($("#ratio").value) / 100,
     enrolled: s.needEnrolled ? pick("#enr input") : {}, prev: s.needPrev ? pick("#prev input") : {}};
-  busy("正在计算…");
+  busy("正在计算…", "正在算各班统计、结构分和教师排名");
   try { V = await post("compute", opts); $("#wizErr").classList.add("hide"); renderResult(); go("result"); toast("核算完成"); }
   catch (e) { const b = $("#wizErr"); b.lastElementChild.textContent = e.message; b.classList.remove("hide"); $(".main").scrollTop = 0; }
   idle();
@@ -860,7 +1082,7 @@ function renderResult(){
   const D = V; curCls = "全部"; sortI = null; sortDir = 0;
   $("#sampleTag").classList.toggle("hide", !D.sample); $$(".xdone").forEach(d => d.classList.remove("on"));
   $("#resEmpty").classList.add("hide"); $("#resBody").classList.remove("hide"); $("#expEmpty").classList.add("hide"); $("#expBody").classList.remove("hide");
-  $$("#tabs button").forEach((x, i) => x.classList.toggle("on", !i)); $$(".pane").forEach(x => x.classList.toggle("on", x.id === "ov"));
+  pickResTab("ov");
   $("#rMeta").textContent = [D.grade, D.scheme + "方案", D.date].filter(Boolean).join(" · "); $("#rTitle").textContent = D.exam; $("#eMeta").textContent = "导出 · " + D.exam;
   const hasS = D.structure.length > 0, S = [...D.structure].sort((a, b) => a["名次"] - b["名次"]), C = [...D.classes].sort((a, b) => a.rank - b.rank);
   const lead = hasS ? ["结构分第一", S[0].name, f2(S[0]["结构分"]), S[1] ? `第二名 ${S[1].name} ${f2(S[1]["结构分"])}` : ""] : ["综合第一", C[0].name, f2(C[0].composite), ""];
@@ -870,8 +1092,17 @@ function renderResult(){
   // 概览
   const W = D.weights, hasAdd = "增值评价" in W, hasTop = "前10名每人加分" in W;
   $("#ovTitle").textContent = hasS ? "班级结构分" : "各班综合得分"; $("#ovTag").textContent = hasS ? "满分 100" + (hasTop ? " + 加分" : "") : D.subjects.length + " 科得分之和";
-  const rows = hasS ? S.map(x => ({no: x["名次"], name: x.name, val: x["结构分"], sub: hasAdd ? (x["上次名次"] ? (() => { const mv = x["上次名次"] - x["两率一分名次"]; return `上次第 ${x["上次名次"]} 名 ${mv > 0 ? `<span class="hi">↑ 进步 ${mv} 名</span>` : mv < 0 ? `<span class="lo">↓ 退步 ${-mv} 名</span>` : "· 持平"}　增值评价 ${f2(x["增值评价分"])}`; })() : `两率一分第 ${x["两率一分名次"]} 名　增值评价 ${f2(x["增值评价分"])}`)
-      : hasTop ? `全级前 10 名 ${x["前10名人数"]} 人　加分 ${f2(x["加分"])}` : ""}))
+  // 每个班名字下面那行小字：有增值评价就写和上次比进退了几名，中考写前 10 名加分
+  const subLine = x => {
+    if (hasAdd) {
+      const add = `　增值评价 ${f2(x["增值评价分"])}`;
+      if (!x["上次名次"]) return `两率一分第 ${x["两率一分名次"]} 名` + add;
+      const mv = x["上次名次"] - x["两率一分名次"];
+      return `上次第 ${x["上次名次"]} 名 ` + (mv > 0 ? `<span class="hi">↑ 进步 ${mv} 名</span>` : mv < 0 ? `<span class="lo">↓ 退步 ${-mv} 名</span>` : "· 持平") + add;
+    }
+    return hasTop ? `全级前 10 名 ${x["前10名人数"]} 人　加分 ${f2(x["加分"])}` : "";
+  };
+  const rows = hasS ? S.map(x => ({no: x["名次"], name: x.name, val: x["结构分"], sub: subLine(x)}))
     : C.map(c => ({no: c.rank, name: c.name, val: c.composite, sub: `上线 ${c.online}/${c.n}`}));
   const mx = Math.max(...rows.map(r => r.val));
   $("#ovRank").innerHTML = rows.map(r => `<div class="rk${r.no === 1 ? " first" : ""}"><span class="no">${r.no}</span><span class="nm"><span class="clk" data-c="${esc(r.name)}">${esc(r.name)}</span></span><div class="tr"><i style="width:${r.val / mx * 100}%"></i></div><span class="sc">${f2(r.val)}</span>${r.sub ? `<span class="mv">${r.sub}</span>` : ""}</div>`).join("");
@@ -881,12 +1112,17 @@ function renderResult(){
   // 班级结构分
   if (hasS){
     const it = D.rateItems;
-    $("#stT").innerHTML = `<thead><tr><th>名次</th><th class="l">班级</th>${"参考率" in W ? "<th>应考</th>" : ""}<th>实考</th>${it.map(k => `<th>${k}<span style="font-weight:400"> / ${num(W[k])}</span></th>`).join("")}<th>小计</th>${hasAdd ? `<th>两率一分</th><th>增值评价 / ${num(W["增值评价"])}</th>` : ""}${hasTop ? "<th>前 10 名加分</th>" : ""}<th>结构分</th></tr></thead><tbody>` +
+    $("#stT").innerHTML = `<thead><tr><th>名次</th><th class="l">班级</th>${"参考率" in W ? "<th>应考</th>" : ""}<th>实考</th>`
+      + it.map(k => `<th>${k}<span style="font-weight:400"> / ${num(W[k])}</span></th>`).join("") + "<th>小计</th>"
+      + (hasAdd ? `<th>两率一分</th><th>增值评价 / ${num(W["增值评价"])}</th>` : "") + (hasTop ? "<th>前 10 名加分</th>" : "") + "<th>结构分</th></tr></thead><tbody>" +
       S.map(x => `<tr><td><span class="pill${x["名次"] === 1 ? " g" : ""}">${x["名次"]}</span></td><td class="l b"><span class="clk" data-c="${esc(x.name)}">${esc(x.name)}</span></td>${"参考率" in W ? `<td class="m">${x["应考人数"]}</td>` : ""}<td class="m">${x["实考人数"]}</td>` +
         it.map(k => `<td${best(S.map(y => y[k + "分"]), x[k + "分"])}>${f2(x[k + "分"])}<span class="s">${pc(x[k])}</span></td>`).join("") + `<td>${f2(x["小计"])}</td>` +
-        (hasAdd ? `<td>${f2(x["两率一分"])}<span class="s">第 ${x["两率一分名次"]}</span></td><td>${f2(x["增值评价分"])}<span class="s">${x["上次名次"] ? "上次第 " + x["上次名次"] : "无上次名次"}</span></td>` : "") + (hasTop ? `<td>${f2(x["加分"])}<span class="s">${x["前10名人数"]} 人</span></td>` : "") +
+        (hasAdd ? `<td>${f2(x["两率一分"])}<span class="s">第 ${x["两率一分名次"]}</span></td>`
+          + `<td>${f2(x["增值评价分"])}<span class="s">${x["上次名次"] ? "上次第 " + x["上次名次"] : "无上次名次"}</span></td>` : "") +
+        (hasTop ? `<td>${f2(x["加分"])}<span class="s">${x["前10名人数"]} 人</span></td>` : "") +
         `<td class="b" style="font-size:15px">${f2(x["结构分"])}</td></tr>`).join("") + "</tbody>";
-    $("#stNote").textContent = "各项直接按比例折分（比率 × 分值），小字是比率。全科合格 / 全科优秀 = 每一科都达标的学生占实考人数的比例。" + (hasAdd ? `增值评价按两率一分（平均成绩 + 全科合格率 + 全科优秀率）排名，和上次的两率一分名次比进退，最高 ${num(W["增值评价"])} 分，超过也按 ${num(W["增值评价"])} 分算。` : "")
+    $("#stNote").textContent = "各项直接按比例折分（比率 × 分值），小字是比率。全科合格 / 全科优秀 = 每一科都达标的学生占实考人数的比例。"
+      + (hasAdd ? `增值评价按两率一分（平均成绩 + 全科合格率 + 全科优秀率）排名，和上次的两率一分名次比进退，最高 ${num(W["增值评价"])} 分，超过也按 ${num(W["增值评价"])} 分算。` : "")
       + (hasAdd && !D.hasPrev ? "本次没有填上次名次，增值评价只按本次名次给分。" : "")
       + (S.some(x => x["应考按实考"]) ? "没有填应考人数的班，按实考人数计算（参考率 100%）。" : "");
   } else { $("#stT").innerHTML = ""; $("#stNote").textContent = "这个方案没有设置班级结构分。"; }
@@ -917,16 +1153,20 @@ function renderResult(){
     `<div class="band"><span class="lab" style="color:var(--down)">线下（${num(D.cut)} 分以下）</span><div class="stk" style="width:${Math.max(D.below / bm * 100, 2)}%"><i style="flex:1;background:var(--down);opacity:.55"></i></div><b>${D.below}</b></div>`;
 
   // 临界生
-  const nt = L => L.length ? `<thead><tr><th class="l">班级</th><th class="l">姓名</th><th>总分</th><th>距线</th><th class="l">薄弱学科</th></tr></thead><tbody>` + L.map(x => `<tr><td class="l m">${esc(x.cls)}</td><td class="l b">${esc(x.name)}</td><td>${num(x.total)}</td><td class="${x.gap < 0 ? "lo" : "hi"}">${x.gap > 0 ? "+" : ""}${x.gap}</td><td class="l"><span class="tag">${esc(x.weak)}</span></td></tr>`).join("") + "</tbody>" : `<tbody><tr><td class="l m">无</td></tr></tbody>`;
+  const nt = L => !L.length ? `<tbody><tr><td class="l m">无</td></tr></tbody>`
+    : `<thead><tr><th class="l">班级</th><th class="l">姓名</th><th>总分</th><th>距线</th><th class="l">薄弱学科</th></tr></thead><tbody>`
+      + L.map(x => `<tr><td class="l m">${esc(x.cls)}</td><td class="l b">${esc(x.name)}</td><td>${num(x.total)}</td>`
+        + `<td class="${x.gap < 0 ? "lo" : "hi"}">${x.gap > 0 ? "+" : ""}${x.gap}</td><td class="l"><span class="tag">${esc(x.weak)}</span></td></tr>`).join("") + "</tbody>";
   const dn = D.near.filter(x => x.pos === "线下"), up = D.near.filter(x => x.pos === "线上");
   $("#nd").textContent = dn.length + " 人"; $("#nu").textContent = up.length + " 人"; $("#neD").innerHTML = nt(dn); $("#neU").innerHTML = nt(up);
 
   $$("#resBody .clk").forEach(e => e.onclick = () => openClass(e.dataset.c));
-  addTips("#resBody");
+  addTips("#resBody"); keyable("#resBody");
   setupCompare();
 
   // 导出页
-  const tips = {"成绩通报": "总体情况、综合排名、主要结论", "各科得分": "各班各科得分", "各科明细": "平均分、及格率、优秀率", "班级结构分": "各项得分与名次", "分数段": "仅供参考", "前N名": "各班人数分布", "教师排名": "同学科内排名", "临界生名单": "含学生姓名，仅限教师", "和上次比": "各班、各科、学生名次的变化，含学生姓名"};
+  const tips = {"成绩通报": "总体情况、综合排名、主要结论", "各科得分": "各班各科得分", "各科明细": "平均分、及格率、优秀率", "班级结构分": "各项得分与名次",
+    "分数段": "仅供参考", "前N名": "各班人数分布", "教师排名": "同学科内排名", "临界生名单": "含学生姓名，仅限教师", "和上次比": "各班、各科、学生名次的变化，含学生姓名"};
   const others = sameGrade(D);
   $("#pdfList").innerHTML = [...D.sections, ...(others.length ? ["和上次比"] : [])].map(k => `<label class="ck"><input type="checkbox" value="${esc(k)}" ${(ST.pdfDefaults[k] ?? k !== "和上次比") ? "checked" : ""}>${CK}<b>${esc(k)}</b><span>${tips[k] || ""}</span></label>`).join("");
   $("#expCmpRow").classList.toggle("hide", !others.length);
@@ -959,7 +1199,10 @@ function openClass(name){
     <p class="sub" style="margin-bottom:16px">实考 ${c.n} 人${st && !st["应考按实考"] ? `，应考 ${st["应考人数"]} 人` : ""}</p>
     <div class="dk" style="grid-template-columns:repeat(${kp.length},1fr)">${kp.map(([k, v, d]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join("")}</div>
     <h2>各科情况</h2><div class="card"><table><thead><tr><th class="l">科目</th><th>平均分</th><th>比全级</th><th>及格率</th><th>优秀率</th><th>得分</th><th>各班中排</th></tr></thead><tbody>` +
-    D.subjects.map(s => { const x = c.subj[s]; return `<tr><td class="l b">${esc(s)}<span class="s" style="display:inline;margin-left:6px">满分 ${num(D.full[s])}</span></td><td>${f1(x.avg)}</td><td>${diff(x.avg - gradeOf(D, s, "avg"))}</td><td>${f1(x.pass)}%</td><td>${f1(x.exc)}%</td><td class="b">${f2(x.score)}</td><td>第 ${rankIn(D.classes.map(y => y.subj[s].score), x.score)}</td></tr>`; }).join("") + `</tbody></table></div>` +
+    D.subjects.map(s => { const x = c.subj[s];
+      return `<tr><td class="l b">${esc(s)}<span class="s" style="display:inline;margin-left:6px">满分 ${num(D.full[s])}</span></td><td>${f1(x.avg)}</td>`
+        + `<td>${diff(x.avg - gradeOf(D, s, "avg"))}</td><td>${f1(x.pass)}%</td><td>${f1(x.exc)}%</td><td class="b">${f2(x.score)}</td>`
+        + `<td>第 ${rankIn(D.classes.map(y => y.subj[s].score), x.score)}</td></tr>`; }).join("") + `</tbody></table></div>` +
     (T.length ? `<h2>任课教师</h2><div class="names">${T.map(t => `<span class="tag">${esc(t.subject)}　${esc(t.name)}<span style="color:var(--faint);margin-left:6px">同学科第 ${t.rank}</span></span>`).join("")}</div>` : "") +
     `<h2>本班前 10 名</h2><div class="card"><table><thead><tr><th>班名次</th><th class="l">姓名</th><th>总分</th><th>级名次</th></tr></thead><tbody>${studs.slice(0, 10).map(r => `<tr><td class="m">${r[5 + ns]}</td><td class="l b">${esc(r[1])}</td><td>${num(r[3 + ns])}</td><td>${r[4 + ns]}</td></tr>`).join("")}</tbody></table></div>
     <h2>临界生 <span class="count" style="font-weight:400">升学线 ${num(D.cut)} 分上下 ${num(D.nearRange)} 分</span></h2>
@@ -967,11 +1210,11 @@ function openClass(name){
     <p class="count" style="margin:12px 0 6px">线上 ${up.length} 人（需要稳住）</p><div class="names">${up.map(x => `<span class="tag a">${esc(x.name)}　+${x.gap}　弱：${esc(x.weak)}</span>`).join("") || '<span class="count">无</span>'}</div>
     <div class="row" style="margin-top:26px"><button class="btn sec" id="toDetail">看这个班的成绩明细</button></div>`;
   $("#toDetail").onclick = () => { closeDrawer(); $('#tabs button[data-t="de"]').click(); curCls = name; $$("#fc button").forEach(x => x.classList.toggle("on", x.textContent === name)); drawStudents(); };
-  $("#drawer").scrollTop = 0; $("#drawer").classList.add("on"); $("#dmask").classList.add("on");
+  addTips("#drawer"); $("#drawer").scrollTop = 0; $("#drawer").classList.add("on"); $("#dmask").classList.add("on");
 }
 function closeDrawer(){ $("#drawer").classList.remove("on"); $("#dmask").classList.remove("on"); }
 $("#drawerX").onclick = closeDrawer; $("#dmask").onclick = closeDrawer;
-document.addEventListener("keydown", e => { if (e.key === "Escape") { closeDrawer(); closeAct(); } });
+$("#drawer").setAttribute("role", "dialog"); $("#drawer").setAttribute("aria-label", "班级详情"); $("#drawer").tabIndex = -1;
 
 // ---------- 和上次比
 function setupCompare(){
@@ -1021,6 +1264,7 @@ async function drawCompare(name){
   $("#cpNear").innerHTML = `<p>上次<b>线下</b>临界生 ${a.all} 人，这次有 <b class="hi">${a.moved.length}</b> 人上线了。</p>${list(a.moved, "a")}
     <p style="margin-top:14px">上次<b>线上</b>临界生 ${b.all} 人，这次有 <b class="lo">${b.moved.length}</b> 人掉到了线下。</p>${list(b.moved, "d")}`;
   $("#cpNote").textContent = `学生按“班级 + 姓名”对应，两次都参加并且能对上的共 ${both.length} 人；换了班、同班重名、缺考的学生不在比较之内。本次升学线 ${num(D.cut)} 分，上次 ${num(P.cut)} 分。`;
+  addTips("#cp"); keyable("#cp");
 }
 
 function drawStudents(){
@@ -1033,7 +1277,9 @@ function drawStudents(){
     rows = [...rows].sort((a, b) => (kind === "txt" ? String(key(a)).localeCompare(String(key(b)), "zh") : key(a) - key(b)) * sortDir);
   }
   $("#cnt").textContent = `共 ${rows.length} 人`;
-  $("#deT").innerHTML = `<thead><tr><th data-tip="跟着筛选和排序变：始终从 1 排起">序号</th>${cols.map(([t, i, kind]) => `<th class="sortable${kind === "num" || kind === "rank" ? "" : " l"}${sortI === i && sortDir ? " sorted" : ""}" data-i="${i}" data-k="${kind}">${esc(t)}<span class="ar">${sortI === i && sortDir ? (sortDir > 0 ? "▲" : "▼") : ""}</span></th>`).join("")}</tr></thead><tbody>` +
+  const head = ([t, i, kind]) => { const on = sortI === i && sortDir;
+    return `<th class="sortable${kind === "num" || kind === "rank" ? "" : " l"}${on ? " sorted" : ""}" data-i="${i}" data-k="${kind}">${esc(t)}<span class="ar">${on ? (sortDir > 0 ? "▲" : "▼") : ""}</span></th>`; };
+  $("#deT").innerHTML = `<thead><tr><th data-tip="跟着筛选和排序变：始终从 1 排起">序号</th>${cols.map(head).join("")}</tr></thead><tbody>` +
     rows.map((r, i) => `<tr><td class="m">${i + 1}</td><td class="l">${esc(r[0])}</td><td class="l b">${esc(r[1])}</td><td class="l m">${esc(r[2])}</td>${r.slice(3, 3 + ns).map(v => `<td>${num(v)}</td>`).join("")}<td class="b">${num(r[3 + ns])}</td><td>${r[4 + ns]}</td><td>${r[5 + ns]}</td></tr>`).join("") + "</tbody>";
   $$("#deT th.sortable").forEach(th => th.onclick = () => { const i = Number(th.dataset.i), first = th.dataset.k === "num" ? -1 : 1;
     if (sortI !== i) { sortI = i; sortDir = first; } else if (sortDir === first) sortDir = -first; else { sortI = null; sortDir = 0; }
@@ -1043,7 +1289,7 @@ function drawStudents(){
 
 // ---------- 导出
 async function doExport(name, body, label){
-  busy("正在导出" + label + "…");
+  busy("正在导出" + label + "…", name === "export_pdf" ? "PDF 要借用电脑上的浏览器排版，一般 5～20 秒" : "表里公式多，一般几秒钟");
   try { const r = await post(name, body); const d = $(name === "export_excel" ? "#xlsDone" : "#pdfDone");
     d.querySelector("b").textContent = "已导出：" + r.name; d.classList.add("on");
     d.querySelectorAll("button").forEach(b => b.onclick = () => call("open_path", {path: r.path, folder: b.dataset.f === "1"}));
@@ -1056,8 +1302,15 @@ $("#pdfBtn").onclick = () => doExport("export_pdf", {sections: $$("#pdfList inpu
 $("#allBtn").onclick = () => $$("#pdfList input:not(:disabled)").forEach(i => i.checked = true);
 
 // ---------- 设置
-function setDirty(v){ dirty = v; $("#savebar").classList.toggle("on", v); if (!v) $("#saveErr").textContent = ""; }
-$("#settings").addEventListener("input", e => { if (e.target.id !== "tFile") setDirty(true); });
+function setDirty(v){
+  dirty = v; $("#savebar").classList.toggle("on", v);
+  if (!v) { $("#saveErr").textContent = ""; $$("#stabs [role=tab]").forEach(t => t.classList.remove("dirty")); }
+}
+$("#settings").addEventListener("input", e => {
+  if (e.target.id === "tFile") return;
+  setDirty(true);
+  const pane = e.target.closest(".spane"); if (pane) $(`#stabs [data-s="${pane.dataset.s}"]`).classList.add("dirty");   // 标签上的小金点：这里有没保存的修改
+});
 async function saveSettings(){
   $("#saveErr").textContent = "";
   const full = Object.fromEntries([...$$("#setChips input[data-s]").map(i => [i.dataset.s, i.value.trim() || 0]), ...($("#newSub").value.trim() ? [[$("#newSub").value.trim(), $("#newSubFull").value.trim() || 0]] : [])]);
@@ -1130,7 +1383,9 @@ function drawTed(){
   $("#tedSeg").innerHTML = TT.grades.map(g => `<button class="${g === tedGrade ? "on" : ""}" data-g="${esc(g)}">${esc(g)}<span style="font-weight:400;color:var(--faint);margin-left:5px">${TT.rows.filter(r => r.grade === g && r.teacher).length}</span></button>`).join("");
   $$("#tedSeg button").forEach(b => b.onclick = () => { tedGrade = b.dataset.g; drawTed(); });
   const ch = TT.gradeChar[tedGrade], rows = TT.rows.filter(r => r.grade === tedGrade);
-  $("#tedRows").innerHTML = rows.map((r, i) => `<tr data-i="${TT.rows.indexOf(r)}"><td><input data-f="subject" list="tedSubs" value="${esc(r.subject)}" placeholder="学科"></td><td><input data-f="teacher" value="${esc(r.teacher)}" placeholder="教师姓名"></td><td><input data-f="classes" value="${esc(r.classes)}" placeholder="${esc(ch)}1、${esc(ch)}2"></td><td><button class="rm" title="删掉这一行">×</button></td></tr>`).join("")
+  $("#tedRows").innerHTML = rows.map(r => `<tr data-i="${TT.rows.indexOf(r)}"><td><input data-f="subject" list="tedSubs" value="${esc(r.subject)}" placeholder="学科"></td>`
+      + `<td><input data-f="teacher" value="${esc(r.teacher)}" placeholder="教师姓名"></td><td><input data-f="classes" value="${esc(r.classes)}" placeholder="${esc(ch)}1、${esc(ch)}2"></td>`
+      + `<td><button class="rm" title="删掉这一行" aria-label="删掉这一行">×</button></td></tr>`).join("")
     || `<tr><td colspan="4" class="count" style="padding:8px 6px">${esc(tedGrade)}还没有任课安排，点下面的“添加一行”。</td></tr>`;
   $$("#tedRows tr[data-i]").forEach(tr => { const row = TT.rows[Number(tr.dataset.i)];
     tr.querySelectorAll("input").forEach(inp => inp.oninput = () => { row[inp.dataset.f] = inp.value; tedDirty = true; });
@@ -1199,7 +1454,84 @@ const TIP = {"实考人数": "各科成绩齐全、计入统计的学生", "应�
   "进线率": "本班升学线以上的人数 ÷ 实考人数 × 分值", "小计": "增值评价之外各项的和", "两率一分": "平均成绩、全科合格率、全科优秀率三项得分之和，增值评价按它排名", "增值评价": "两率一分第 1 名得满分，每低一名减一点；比上次的两率一分名次进步加分、退步减分，最高不超过满分",
   "前 10 名加分": "全级总分前 10 名（同分都算）每有一人，给本班加分", "综合得分": "各科单科得分之和", "上线率": "本班总分达到升学线的人数 ÷ 实考人数", "结构分": "各项得分相加，满分 100（另有加分）",
   "级名次": "按总分在全年级的排名，同分同名次", "班名次": "按总分在本班的排名，同分同名次"};
-function addTips(root){ $$(root + " th, " + root + " .kpi .k").forEach(e => { const t = e.childNodes[0] && e.childNodes[0].textContent.trim(); if (TIP[t]) e.dataset.tip = TIP[t]; }); }
+function addTips(root){
+  $$(root + " th, " + root + " .kpi .k").forEach(e => {
+    const t = e.childNodes[0] && e.childNodes[0].textContent.trim();
+    if (TIP[t]) e.dataset.tip = TIP[t];
+    if (e.dataset.tip && !e.querySelector(".qi")) e.insertAdjacentHTML("beforeend", '<i class="qi" tabindex="0" role="button" aria-label="这是什么意思">?</i>');
+  });
+}
+
+// ---------- 说明气泡：带 data-tip 的地方，鼠标停一下就出来；点 ? 号（触屏）或用 Tab 键走到 ? 号上也会出来
+const tipEl = document.createElement("div"); tipEl.id = "tip"; tipEl.setAttribute("role", "tooltip"); document.body.appendChild(tipEl);
+let tipOn = null;
+function showTip(el){
+  clearTimeout(showTip.t); tipOn = el;
+  tipEl.innerHTML = (el.dataset.tipTitle ? `<b>${esc(el.dataset.tipTitle)}</b>` : "") + esc(el.dataset.tip);
+  tipEl.style.left = "100px"; tipEl.style.top = "0px"; tipEl.classList.add("on");
+  const k = tipEl.getBoundingClientRect().left / 100 || 1;            // 字号放大后，页面坐标和屏幕坐标差一个倍数，先量出来
+  const r = el.getBoundingClientRect(), t = tipEl.getBoundingClientRect(), gap = 8;
+  let x = r.left + r.width / 2 - t.width / 2, y = r.bottom + gap;
+  if (el.dataset.tipPos === "right") { x = r.right + gap; y = r.top + r.height / 2 - t.height / 2; }
+  else if (y + t.height > innerHeight - 8) y = r.top - gap - t.height;   // 下面放不下就放上面
+  x = Math.max(8, Math.min(x, innerWidth - t.width - 8)); y = Math.max(8, y);
+  tipEl.style.left = x / k + "px"; tipEl.style.top = y / k + "px";
+}
+function hideTip(){ clearTimeout(showTip.t); tipOn = null; tipEl.classList.remove("on"); }
+document.addEventListener("mouseover", e => {
+  const el = e.target.closest ? e.target.closest("[data-tip]") : null;
+  if (el === tipOn) return;
+  hideTip(); if (!el) return;
+  showTip.t = setTimeout(() => showTip(el), el.matches(".nav button, [role=tab], .lic") ? 550 : 220);
+});
+document.addEventListener("click", e => {
+  const q = e.target.closest(".qi");
+  if (!q) { hideTip(); return; }
+  e.preventDefault(); e.stopPropagation();                             // 点 ? 号只看说明，不排序
+  showTip(q.closest("[data-tip]"));                                    // 点别处就收起
+}, true);
+document.addEventListener("focusin", e => { const q = e.target.closest && e.target.closest(".qi"); if (q) showTip(q.closest("[data-tip]")); else if (tipOn) hideTip(); });
+document.addEventListener("scroll", () => {                           // 滚动时气泡跟着走；那个词滚出窗口就收起
+  if (!tipOn) return;
+  const r = tipOn.getBoundingClientRect();
+  r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth ? hideTip() : showTip(tipOn);
+}, true);
+
+// ---------- 弹窗：打开时光标移进去，Tab 键只在弹窗里转，Esc 关掉最上面那一层；关上后光标回到原来的按钮
+const LAYERS = ["#drawer", "#mask", "#ted", "#dlg", "#upd", "#welcome"].map(q => $(q));      // 后面的盖在前面的上面
+const topLayer = () => LAYERS.filter(x => x.classList.contains("on")).pop();
+const focusables = el => [...el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent !== null);
+const opener = new Map();
+$$(".mask > .modal").forEach(m => { m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
+  const h = m.querySelector("h2"); if (h) { h.id = h.id || "t_" + m.parentNode.id; m.setAttribute("aria-labelledby", h.id); } });
+const layerWatch = new MutationObserver(ms => ms.forEach(m => {
+  const el = m.target, on = el.classList.contains("on");
+  if (on && !opener.has(el)) {
+    opener.set(el, document.activeElement); hideTip();
+    setTimeout(() => { if (el.classList.contains("on") && !el.contains(document.activeElement)) (focusables(el)[0] || el).focus(); }, 120);
+  } else if (!on && opener.has(el)) {
+    const o = opener.get(el); opener.delete(el);
+    if (o && o !== document.body && document.contains(o) && o.offsetParent !== null) o.focus({preventScroll: true});
+  }
+}));
+LAYERS.forEach(x => layerWatch.observe(x, {attributes: true, attributeFilter: ["class"]}));
+document.addEventListener("keydown", e => {
+  const L = topLayer();
+  if (e.key === "Escape") {
+    hideTip(); if (!L) return;
+    ({drawer: closeDrawer, mask: closeAct, dlg: () => $("#dlgNo").click(), ted: () => $("#tedNo").click(),
+      upd: () => { if (!$("#updLater").disabled) $("#updLater").click(); }, welcome: () => {}})[L.id]();
+  } else if (e.key === "Tab" && L) {
+    const f = focusables(L); if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && (i === f.length - 1 || i < 0)) { e.preventDefault(); f[0].focus(); }
+  } else if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".li[data-n], .li.more, .clk, .lic")) {
+    e.preventDefault(); e.target.click();                               // 用键盘也能打开考试、班级
+  }
+});
+// 能点的文字（班级名）也能用 Tab 键走到
+function keyable(root){ $$(root + " .clk").forEach(x => { if (!x.hasAttribute("tabindex")) { x.tabIndex = 0; x.setAttribute("role", "button"); } }); }
 
 function paintTeacher(t){ const e = $("#tInfo"); e.textContent = t.text; e.className = "tag " + (t.exists ? "a" : "g"); }
 $("#saveBtn").onclick = saveSettings;
