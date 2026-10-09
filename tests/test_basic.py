@@ -513,3 +513,22 @@ def test_compare_export_needs_license(tmp_path, monkeypatch):
         app.api_export_excel({"compare": "上次"})
     with pytest.raises(lic.LicenseError):
         app.api_export_pdf({"sections": ["和上次比"], "compare": "上次"})
+
+
+def test_licensed_build_locks_when_module_missing(monkeypatch):
+    """正式安装包（打包时记下了 LICENSED）里如果验证模块不见了：锁住导出，不能变成不限制的版本。
+    公开源码自己运行（没有 LICENSED）时照旧不限制。"""
+    from chengji import license as lic
+    monkeypatch.setattr(lic, "_impl", None)
+    monkeypatch.setattr(lic, "LICENSED", False)
+    assert lic.status()["state"] == "open" and lic.can_export() and lic.module_kind() == "none"
+    monkeypatch.setattr(lic, "LICENSED", True)
+    monkeypatch.setattr(lic, "FROZEN", False)
+    assert lic.can_export()                                          # 用源码运行（开发、测试）不受影响
+    monkeypatch.setattr(lic, "FROZEN", True)
+    st = lic.status()
+    assert not st["canExport"] and "不完整" in st["message"]
+    with pytest.raises(lic.LicenseError):
+        lic.require_export()
+    with pytest.raises(ValueError):
+        lic.activate("任何码")

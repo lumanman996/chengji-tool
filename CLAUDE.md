@@ -204,6 +204,10 @@ tools/              生成模板和虚构示例数据；ui_screens.py 给界面�
 - **仓库是公开的，但激活相关的东西不上传**（用户明确要求）：`chengji/_license_impl.py`、`admin/`（生成器、私钥、
   发放记录）都在 .gitignore 里。CI 打包时从仓库保密项 `LICENSE_IMPL`（该文件的 base64）取出放进去；
   改了 `_license_impl.py` 要重新 `gh secret set LICENSE_IMPL`。没有这个模块时（公开源码）程序不做限制。
+- **验证模块编译成机器码**（2026-10-09 用户要求，防破解）：`packaging/build.py` 打包时用 Cython 把 `_license_impl.py` 编译成
+  .pyd / .so（`packaging/compile_license.py`），安装包里只有编译后的文件、没有源码；同时写 `_build_info.py`（`LICENSED = True`）。
+  正式安装包里验证模块缺失或损坏时，`license.py` **锁住导出**，不会退回不限制的公开源码版。
+  打包自检会检查模块是机器码，并在程序副本里删掉它确认导出被锁；Windows 打包后用 Defender 扫一遍看有没有误报。
 - 许可只在打包后的程序里生效（`FROZEN`）；源码运行默认不限制，测试用环境变量 `CHENGJI_LICENSE_ENFORCE=1` 打开。
   测试用的 `CHENGJI_LICENSE_DIR`、`CHENGJI_MACHINE_RAW` 在打包程序里不认（否则能重置试用）。
 - 打包：`packaging/build.py`（onedir + windowed）。Mac 是 .app，用 ditto 压缩；数据放“文稿/分寸成绩核算”。

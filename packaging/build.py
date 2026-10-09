@@ -7,7 +7,8 @@
   Mac      dist/分寸.app                （设置和结果放在“文稿/分寸成绩核算”文件夹）
            dist/chengji-tool-v版本-mac.zip
 
-有 chengji/_license_impl.py（试用与激活模块，不在公开仓库里）时会一起打进去；没有就是不限制的版本。
+有 chengji/_license_impl.py（试用与激活模块，不在公开仓库里）时，先把它编译成机器码再打进去（packaging/compile_license.py），
+安装包里没有它的源码；没有就是不限制的版本。
 """
 from __future__ import annotations
 
@@ -22,6 +23,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from chengji import __version__   # noqa: E402
+
+sys.path.insert(0, str(ROOT / "packaging"))
+from compile_license import compiled_license   # noqa: E402
 
 NAME = "分寸"
 DIST = ROOT / "dist"
@@ -44,8 +48,12 @@ def main():
         cmd += ["--exclude-module", mod]
     if MAC:
         cmd += ["--osx-bundle-identifier", "cn.chengji.scorebook"]
+    cmd += ["--hidden-import", "chengji._build_info"]
     cmd.append(str(ROOT / "packaging" / "entry.py"))
-    subprocess.run(cmd, check=True, cwd=ROOT)
+    with compiled_license() as native:
+        if native:
+            print(f"试用与激活模块已编译成机器码：{native.name}")
+        subprocess.run(cmd, check=True, cwd=ROOT)
 
     system = {"Windows": "windows", "Darwin": "mac", "Linux": "linux"}.get(platform.system(), platform.system().lower())
     zpath = DIST / f"chengji-tool-v{__version__}-{system}.zip"
@@ -75,7 +83,7 @@ def main():
                 z.write(f, Path(NAME) / f.relative_to(app))
         target = app
     size = zpath.stat().st_size / 1024 / 1024
-    print(f"\n打包完成：{target}\n压缩包：{zpath}（{size:.1f} MB）\n试用与激活模块：{'已包含' if licensed else '没有（不限制的版本）'}")
+    print(f"\n打包完成：{target}\n压缩包：{zpath}（{size:.1f} MB）\n试用与激活模块：{'已包含（编译成机器码）' if licensed else '没有（不限制的版本）'}")
 
 
 if __name__ == "__main__":

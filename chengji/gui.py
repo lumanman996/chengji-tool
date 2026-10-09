@@ -27,7 +27,9 @@ def selftest() -> int:
     st = json.loads(urllib.request.urlopen(req, timeout=10).read().decode("utf-8"))
     httpd.shutdown()
     ok = "分寸" in html and st.get("ok")
-    info = {"ok": bool(ok), "version": st["data"]["version"], "license": st["data"]["license"]["state"], "root": str(app.root)}
+    from . import license as lic
+    info = {"ok": bool(ok), "version": st["data"]["version"], "license": st["data"]["license"]["state"], "root": str(app.root),
+            "licenseModule": lic.module_kind(), "canExport": st["data"]["license"]["canExport"]}
     (app.root / "自检结果.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(info, ensure_ascii=False))
     return 0 if ok else 1
