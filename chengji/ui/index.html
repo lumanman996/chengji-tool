@@ -408,7 +408,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
               <div class="field"><label>科目与满分</label><div class="chips" id="fullChips"></div><div class="hint" id="fullHint">和这次考试不一样的，直接改数字。红色的科目还没有满分，需要填上。哪一科这次不算，点它右边的 ×。</div></div>
               <div class="field"><label>升学线：全级前百分之几</label><div class="range"><input type="range" id="ratio" min="30" max="100" step="1"><b id="rv"></b></div></div>
               <div class="field" id="fEnr"><label>各班应考人数 <span style="font-weight:400;color:var(--faint)">（可以不填：不填就按实考人数算，参考率按 100%）</span></label><div class="cls6" id="enr"></div></div>
-              <div class="field" id="fPrev"><label>上次考试的结构分名次 <span style="font-weight:400;color:var(--faint)">（增值评价用；没有上次成绩就全部空着）</span></label><div class="cls6" id="prev"></div><div class="hint" id="prevHint"></div></div>
+              <div class="field" id="fPrev"><label>上次考试的两率一分名次 <span style="font-weight:400;color:var(--faint)">（增值评价用；没有上次成绩就全部空着）</span></label><div class="cls6" id="prev"></div><div class="hint" id="prevHint"></div></div>
               <div class="row"><div class="sp"></div><button class="btn sec" onclick="go('home')">重新选文件</button><button class="btn pri lg" id="run">开始计算</button></div>
             </div>
           </div>
@@ -514,7 +514,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
             <div class="formula" id="algoFormula"></div></div>
           <div class="field" style="margin-top:22px"><label>班级结构分<span class="sum" id="sum2"></span></label><div class="chips" id="algoStruct"></div>
             <div class="hint">填 0 表示这一项不算。平均成绩按“本班总分平均 ÷ 总分满分”算，两个方案都一样。</div>
-            <div class="aline" id="algoAdd">增值评价：其他各项小计第 1 名得满分 <b id="addCap"></b>，每低一名减 <input data-p="增值名次差" inputmode="decimal"> 分；比上次每进步（退步）一名，加（减）<input data-p="增值进退步" inputmode="decimal"> 分。<br><b>最高不超过 <span id="addCap2"></span>，加出来超过的也按 <span id="addCap3"></span>算。</b></div>
+            <div class="aline" id="algoAdd">增值评价：按“两率一分”（平均成绩 + 全科合格率 + 全科优秀率，不含参考率）排名，第 1 名得满分 <b id="addCap"></b>，每低一名减 <input data-p="增值名次差" inputmode="decimal"> 分；和上次的两率一分名次比，每进步（退步）一名，加（减）<input data-p="增值进退步" inputmode="decimal"> 分。<br><b>最高不超过 <span id="addCap2"></span>，加出来超过的也按 <span id="addCap3"></span>算。</b></div>
             <div class="aline">前 10 名加分：全级前 10 名每有一人，给本班加 <input data-p="前10名每人加分" inputmode="decimal"> 分（填 0 就是不加）</div></div>
           <div class="row" style="margin-top:14px"><button class="btn ghost" id="algoReset" style="padding:0">分数线和算法恢复成默认</button></div>
         </div></div>
@@ -556,7 +556,8 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--ink)}
         <dt>全科合格率</dt><dd>每一科都达到合格线的学生，占实考人数的比例。有一科不合格就不算。全科优秀率同理。</dd>
         <dt>参考率</dt><dd>实考人数 ÷ 应考人数。</dd>
         <dt>进线率</dt><dd>本班总分达到升学线的人数 ÷ 实考人数。</dd>
-        <dt>增值评价</dt><dd>先按其他各项的小计排名，第 1 名得满分，每低一名减一点；再和上次考试的结构分名次比，进步加分、退步减分。最高不超过满分。</dd>
+        <dt>两率一分</dt><dd>也叫“二率一分”：全科合格率、全科优秀率、平均成绩这三项结构分得分之和，增值评价按它排名。</dd>
+        <dt>增值评价</dt><dd>先按两率一分排名，第 1 名得满分，每低一名减一点；再和上次考试的两率一分名次比，进步加分、退步减分。最高不超过满分。</dd>
         <dt>升学线</dt><dd>全级总分排在前 N%（默认 85%）那一名学生的总分。同分的都算在线上。只是参考线，每次可以改。</dd>
         <dt>临界生</dt><dd>总分在升学线上下若干分（默认 15 分）以内的学生。线下的是冲线重点，线上的要稳住。</dd>
         <dt>薄弱学科</dt><dd>这名学生得分率（成绩 ÷ 满分）最低的那一科。</dd>
@@ -760,6 +761,7 @@ async function refresh(){
   $("#cGithubCopy").onclick = () => copyText(ST.contact.github, "已复制网址");
   $("#cGithubOpen").onclick = () => call("open_repo");
   paintLicense(ST.license);
+  if (ST.upgraded && ST.upgraded.length) toast(`增值评价的算法已更正：以前的 ${ST.upgraded.length} 次考试已按新规则重算`, 5200);
   if (ST.firstRun && !$("#welcome").dataset.shown) { $("#welcome").dataset.shown = "1"; $("#welcome").classList.add("on"); setTimeout(() => $("#wSchool").focus(), 80); }
 }
 // 第一次打开的引导
@@ -822,7 +824,7 @@ function buildWizard(){
   $("#enr").innerHTML = I.classes.map(c => `<div class="mini"><small>${esc(c)} · 表内 ${I.listed[c]}</small><input data-c="${esc(c)}" value="${I.enrolled[c] ?? ""}" placeholder="实考 ${I.counts[c]}" inputmode="numeric"></div>`).join("");
   const L = I.last;                                                       // 同年级上次考试：名次、应考人数先带进来，可以改
   $("#prev").innerHTML = I.classes.map(c => `<div class="mini"><small>${esc(c)}</small><input data-c="${esc(c)}" value="${L && L.ranks[c] ? L.ranks[c] : ""}" placeholder="名次" inputmode="numeric"></div>`).join("");
-  $("#prevHint").innerHTML = L && Object.keys(L.ranks).length ? `已带入《${esc(L.name)}》的结构分名次，可以改。这次不想和它比，就 <a id="prevClear" style="color:var(--accent);font-weight:600;cursor:pointer">清空</a>。` : "";
+  $("#prevHint").innerHTML = L && Object.keys(L.ranks).length ? `已带入《${esc(L.name)}》的两率一分名次，可以改。这次不想和它比，就 <a id="prevClear" style="color:var(--accent);font-weight:600;cursor:pointer">清空</a>。` : "";
   if ($("#prevClear")) $("#prevClear").onclick = () => { $$("#prev input").forEach(i => i.value = ""); $("#prevHint").textContent = ""; };
   if (L) $$("#enr input").forEach(i => { if (!i.value && L.enrolled[i.dataset.c]) i.value = L.enrolled[i.dataset.c]; });
   paintScheme();
@@ -868,7 +870,7 @@ function renderResult(){
   // 概览
   const W = D.weights, hasAdd = "增值评价" in W, hasTop = "前10名每人加分" in W;
   $("#ovTitle").textContent = hasS ? "班级结构分" : "各班综合得分"; $("#ovTag").textContent = hasS ? "满分 100" + (hasTop ? " + 加分" : "") : D.subjects.length + " 科得分之和";
-  const rows = hasS ? S.map(x => ({no: x["名次"], name: x.name, val: x["结构分"], sub: hasAdd ? (x["上次名次"] ? (() => { const mv = x["上次名次"] - x["小计名次"]; return `上次第 ${x["上次名次"]} 名 ${mv > 0 ? `<span class="hi">↑ 进步 ${mv} 名</span>` : mv < 0 ? `<span class="lo">↓ 退步 ${-mv} 名</span>` : "· 持平"}　增值评价 ${f2(x["增值评价分"])}`; })() : `各项小计第 ${x["小计名次"]} 名　增值评价 ${f2(x["增值评价分"])}`)
+  const rows = hasS ? S.map(x => ({no: x["名次"], name: x.name, val: x["结构分"], sub: hasAdd ? (x["上次名次"] ? (() => { const mv = x["上次名次"] - x["两率一分名次"]; return `上次第 ${x["上次名次"]} 名 ${mv > 0 ? `<span class="hi">↑ 进步 ${mv} 名</span>` : mv < 0 ? `<span class="lo">↓ 退步 ${-mv} 名</span>` : "· 持平"}　增值评价 ${f2(x["增值评价分"])}`; })() : `两率一分第 ${x["两率一分名次"]} 名　增值评价 ${f2(x["增值评价分"])}`)
       : hasTop ? `全级前 10 名 ${x["前10名人数"]} 人　加分 ${f2(x["加分"])}` : ""}))
     : C.map(c => ({no: c.rank, name: c.name, val: c.composite, sub: `上线 ${c.online}/${c.n}`}));
   const mx = Math.max(...rows.map(r => r.val));
@@ -879,12 +881,12 @@ function renderResult(){
   // 班级结构分
   if (hasS){
     const it = D.rateItems;
-    $("#stT").innerHTML = `<thead><tr><th>名次</th><th class="l">班级</th>${"参考率" in W ? "<th>应考</th>" : ""}<th>实考</th>${it.map(k => `<th>${k}<span style="font-weight:400"> / ${num(W[k])}</span></th>`).join("")}<th>小计</th>${hasAdd ? `<th>增值评价 / ${num(W["增值评价"])}</th>` : ""}${hasTop ? "<th>前 10 名加分</th>" : ""}<th>结构分</th></tr></thead><tbody>` +
+    $("#stT").innerHTML = `<thead><tr><th>名次</th><th class="l">班级</th>${"参考率" in W ? "<th>应考</th>" : ""}<th>实考</th>${it.map(k => `<th>${k}<span style="font-weight:400"> / ${num(W[k])}</span></th>`).join("")}<th>小计</th>${hasAdd ? `<th>两率一分</th><th>增值评价 / ${num(W["增值评价"])}</th>` : ""}${hasTop ? "<th>前 10 名加分</th>" : ""}<th>结构分</th></tr></thead><tbody>` +
       S.map(x => `<tr><td><span class="pill${x["名次"] === 1 ? " g" : ""}">${x["名次"]}</span></td><td class="l b"><span class="clk" data-c="${esc(x.name)}">${esc(x.name)}</span></td>${"参考率" in W ? `<td class="m">${x["应考人数"]}</td>` : ""}<td class="m">${x["实考人数"]}</td>` +
-        it.map(k => `<td${best(S.map(y => y[k + "分"]), x[k + "分"])}>${f2(x[k + "分"])}<span class="s">${pc(x[k])}</span></td>`).join("") + `<td>${f2(x["小计"])}<span class="s">第 ${x["小计名次"]}</span></td>` +
-        (hasAdd ? `<td>${f2(x["增值评价分"])}<span class="s">${x["上次名次"] ? "上次第 " + x["上次名次"] : "无上次名次"}</span></td>` : "") + (hasTop ? `<td>${f2(x["加分"])}<span class="s">${x["前10名人数"]} 人</span></td>` : "") +
+        it.map(k => `<td${best(S.map(y => y[k + "分"]), x[k + "分"])}>${f2(x[k + "分"])}<span class="s">${pc(x[k])}</span></td>`).join("") + `<td>${f2(x["小计"])}</td>` +
+        (hasAdd ? `<td>${f2(x["两率一分"])}<span class="s">第 ${x["两率一分名次"]}</span></td><td>${f2(x["增值评价分"])}<span class="s">${x["上次名次"] ? "上次第 " + x["上次名次"] : "无上次名次"}</span></td>` : "") + (hasTop ? `<td>${f2(x["加分"])}<span class="s">${x["前10名人数"]} 人</span></td>` : "") +
         `<td class="b" style="font-size:15px">${f2(x["结构分"])}</td></tr>`).join("") + "</tbody>";
-    $("#stNote").textContent = "各项直接按比例折分（比率 × 分值），小字是比率。全科合格 / 全科优秀 = 每一科都达标的学生占实考人数的比例。" + (hasAdd ? `增值评价最高 ${num(W["增值评价"])} 分，超过也按 ${num(W["增值评价"])} 分算。` : "")
+    $("#stNote").textContent = "各项直接按比例折分（比率 × 分值），小字是比率。全科合格 / 全科优秀 = 每一科都达标的学生占实考人数的比例。" + (hasAdd ? `增值评价按两率一分（平均成绩 + 全科合格率 + 全科优秀率）排名，和上次的两率一分名次比进退，最高 ${num(W["增值评价"])} 分，超过也按 ${num(W["增值评价"])} 分算。` : "")
       + (hasAdd && !D.hasPrev ? "本次没有填上次名次，增值评价只按本次名次给分。" : "")
       + (S.some(x => x["应考按实考"]) ? "没有填应考人数的班，按实考人数计算（参考率 100%）。" : "");
   } else { $("#stT").innerHTML = ""; $("#stNote").textContent = "这个方案没有设置班级结构分。"; }
@@ -1194,7 +1196,7 @@ $("#updBtn").onclick = () => checkUpdate(true);
 const TIP = {"实考人数": "各科成绩齐全、计入统计的学生", "应考": "应该参加考试的在籍学生；没填就按实考人数算", "实考": "各科成绩齐全、计入统计的学生",
   "升学线": "全级总分排在前 N% 那一名学生的总分，同分都算线上。只是参考线", "线上人数": "总分达到升学线的学生", "平均成绩": "本班总分平均分 ÷ 总分满分 × 这一项的分值",
   "全科合格率": "每一科都达到合格线的学生 ÷ 实考人数 × 分值。有一科不合格就不算", "全科优秀率": "每一科都达到优秀线的学生 ÷ 实考人数 × 分值", "参考率": "实考人数 ÷ 应考人数 × 分值；没填应考人数按 100%",
-  "进线率": "本班升学线以上的人数 ÷ 实考人数 × 分值", "小计": "增值评价之外各项的和，用它来排增值评价的名次", "增值评价": "小计第 1 名得满分，每低一名减一点；比上次名次进步加分、退步减分，最高不超过满分",
+  "进线率": "本班升学线以上的人数 ÷ 实考人数 × 分值", "小计": "增值评价之外各项的和", "两率一分": "平均成绩、全科合格率、全科优秀率三项得分之和，增值评价按它排名", "增值评价": "两率一分第 1 名得满分，每低一名减一点；比上次的两率一分名次进步加分、退步减分，最高不超过满分",
   "前 10 名加分": "全级总分前 10 名（同分都算）每有一人，给本班加分", "综合得分": "各科单科得分之和", "上线率": "本班总分达到升学线的人数 ÷ 实考人数", "结构分": "各项得分相加，满分 100（另有加分）",
   "级名次": "按总分在全年级的排名，同分同名次", "班名次": "按总分在本班的排名，同分同名次"};
 function addTips(root){ $$(root + " th, " + root + " .kpi .k").forEach(e => { const t = e.childNodes[0] && e.childNodes[0].textContent.trim(); if (TIP[t]) e.dataset.tip = TIP[t]; }); }

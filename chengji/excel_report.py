@@ -9,7 +9,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter as L
 
-from .analysis import RATE_ITEMS, Result
+from .analysis import RATE_ITEMS, TWO_RATES, Result
 
 FONT = "微软雅黑"
 _thin = Side(style="thin", color="999999")
@@ -81,8 +81,8 @@ def build_excel(R: Result, path, conclusions: list[str], compare: dict | None = 
     W = cfg.structure if R.structure else {}
     sdesc = {"平均成绩": "本班总分平均分 ÷ 总分满分 × 分值", "全科合格率": "每科都合格的人数 ÷ 实考人数 × 分值",
              "全科优秀率": "每科都优秀的人数 ÷ 实考人数 × 分值", "参考率": "实考人数 ÷ 应考人数 × 分值",
-             "进线率": "升学线以上人数 ÷ 实考人数 × 分值", "增值评价": "其他各项小计第1名得满分",
-             "增值名次差": "小计每低一个名次，增值评价减几分", "增值进退步": "比上次每进步/退步一名，加/减几分（不超过满分）",
+             "进线率": "升学线以上人数 ÷ 实考人数 × 分值", "增值评价": "两率一分（平均成绩+全科合格率+全科优秀率）第1名得满分",
+             "增值名次差": "两率一分每低一个名次，增值评价减几分", "增值进退步": "比上次的两率一分名次每进步/退步一名，加/减几分（不超过满分）",
              "前10名每人加分": "全级总分前10名（同分计入）每有一人，本班加几分"}
     for k, v in W.items():
         items.append((f"结构分：{k}" + ("（分值）" if k in RATE_ITEMS or k == "增值评价" else ""), v,
@@ -465,9 +465,11 @@ def _structure_sheet(wb, R: Result, P, rng, cls, tot, SC, NS, TC, rT):
     tail = ["小计"]
     if "增值评价" in W:
         g = f"增值评价（{W['增值评价']:g}分）"
-        cols += [(g, "小计名次", "=RANK({小计}{r},{小计}$5:{小计}$%d)" % (4 + nc), "0", False),
+        base = "+".join("{%s分}{r}" % k for k in TWO_RATES if k in W) or "0"
+        cols += [(g, "两率一分", "=" + base, "0.00", False),
+                 (g, "两率一分名次", "=RANK({两率一分}{r},{两率一分}$5:{两率一分}$%d)" % (4 + nc), "0", False),
                  (g, "上次名次", "prev", "0", True),
-                 (g, "增值评价分", "=MIN(%s,%s-%s*({小计名次}{r}-1)+IF({上次名次}{r}=\"\",0,({上次名次}{r}-{小计名次}{r})*%s))"
+                 (g, "增值评价分", "=MIN(%s,%s-%s*({两率一分名次}{r}-1)+IF({上次名次}{r}=\"\",0,({上次名次}{r}-{两率一分名次}{r})*%s))"
                   % (w("增值评价"), w("增值评价"), P["结构分：增值名次差"], P["结构分：增值进退步"]), "0.00", False)]
         tail.append("增值评价分")
     if "前10名每人加分" in W:
@@ -538,9 +540,10 @@ def _structure_sheet(wb, R: Result, P, rng, cls, tot, SC, NS, TC, rT):
     if "进线率" in W:
         lines.append(f"进线率 = 本班升学线（全级前{cfg.promote_ratio:.0%}）以上人数 ÷ 实考人数。")
     if "增值评价" in W:
-        lines.append(f"增值评价：按“小计”排名，第1名得 {W['增值评价']:g} 分，每低一名减 {W.get('增值名次差', 0.1):g} 分；"
-                     f"再与上次考试的结构分名次比，每进步一名加 {W.get('增值进退步', 0.05):g} 分、每退步一名减 {W.get('增值进退步', 0.05):g} 分，"
-                     f"最高 {W['增值评价']:g} 分。上次名次空着 = 不算进步退步。下次考试时，把本表的“名次”作为上次名次输入。")
+        lines.append(f"增值评价：按“两率一分”（平均成绩、全科合格率、全科优秀率三项得分之和，不含参考率）排名，第1名得 {W['增值评价']:g} 分，"
+                     f"每低一名减 {W.get('增值名次差', 0.1):g} 分；再与上次考试的两率一分名次比，每进步一名加 {W.get('增值进退步', 0.05):g} 分、"
+                     f"每退步一名减 {W.get('增值进退步', 0.05):g} 分，最高 {W['增值评价']:g} 分。上次名次空着 = 不算进步退步。"
+                     "下次考试时，把本表的“两率一分名次”作为上次名次输入。")
     if "前10名每人加分" in W:
         lines.append(f"前10名加分：全级总分前10名（同分计入）每有一人，本班加 {W['前10名每人加分']:g} 分。")
     for i, t in enumerate(lines):

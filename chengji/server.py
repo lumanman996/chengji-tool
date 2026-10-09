@@ -118,6 +118,7 @@ class App:
         self.window = None                # 程序窗口（有它才能弹出系统的“存储”对话框）；浏览器方式下是 None
         self.updater = updater.Updater()  # 一键更新：下载、替换
         self.update_info = None
+        self._upgraded = False            # 旧规则算的考试是否已经检查、重算过
 
     def school(self):
         return load_school(self.config, self.local)
@@ -126,7 +127,11 @@ class App:
     def api_state(self, _=None):
         s = self.school()
         loc = self._local()
-        return {"version": __version__, "school": s.name, "nativeDialog": self.window is not None,
+        upgraded = []
+        if not self._upgraded:                              # 以前按旧规则算的考试：第一次打开时按新规则重算
+            self._upgraded = True
+            upgraded = sv.upgrade_runs(self.output, s, self.teacher)
+        return {"upgraded": upgraded, "version": __version__, "school": s.name, "nativeDialog": self.window is not None,
                 "firstRun": not loc.get("已引导") and not loc.get("学校") and not sv.list_runs(self.output, 1),
                 "contact": CONTACT, "autoUpdate": auto_update_check(), "fontSize": loc.get("界面字号") or "标准", "root": friendly_path(self.root), "hasSample": (self.root / "samples" / SAMPLE[0]).is_file(), "license": lic.status(), "recent": sv.list_runs(self.output),
                 "templates": list(s.grade_subjects), "pdfDefaults": s.pdf_sections, "hasTeacherTable": self.teacher.is_file()}

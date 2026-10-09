@@ -242,9 +242,9 @@ def _structure_body(R: Result) -> str:
             vals = [X[y][k + "分"] for y in CL]
             body += f'<td{_mark(vals, x[k + "分"])}>{f2(x[k + "分"])}<br>{small}{pct(x[k])}</span></td>'
         if "增值评价" in W:
-            prev = f"上次第{x['上次名次']}" if x["上次名次"] else "无上次"
-            body += (f'<td>{f2(x["小计"])}<br>{small}第{x["小计名次"]}</span></td>'
-                     f'<td>{f2(x["增值评价分"])}<br>{small}{prev}</span></td>')
+            prev = f"，上次第{x['上次名次']}" if x["上次名次"] else ""
+            body += (f'<td>{f2(x["小计"])}</td>'
+                     f'<td>{f2(x["增值评价分"])}<br>{small}两率一分第{x["两率一分名次"]}{prev}</span></td>')
         if "前10名每人加分" in W:
             body += f'<td>{f2(x["加分"])}<br>{small}{x["前10名人数"]}人</span></td>'
         body += f'<td class="b" style="font-size:15px">{f2(x["结构分"])}</td></tr>'
@@ -259,8 +259,8 @@ def _structure_body(R: Result) -> str:
         rule.append(f"进线率 = 本班升学线（全级前{pct(cfg.promote_ratio, 0)}，{R.cut:g}分）以上人数 ÷ 实考人数。")
     if "增值评价" in W:
         step, mv = W.get("增值名次差", 0.1), W.get("增值进退步", 0.05)
-        rule.append(f"增值评价：前几项小计第1名 {W['增值评价']:g} 分，每低一名减 {step:g} 分；与上次结构分名次比，"
-                    f"每进步一名加 {mv:g} 分、退步一名减 {mv:g} 分，最高 {W['增值评价']:g} 分。"
+        rule.append(f"增值评价：按两率一分（平均成绩、全科合格率、全科优秀率三项得分之和）排名，第1名 {W['增值评价']:g} 分，每低一名减 {step:g} 分；"
+                    f"与上次的两率一分名次比，每进步一名加 {mv:g} 分、退步一名减 {mv:g} 分，最高 {W['增值评价']:g} 分。"
                     + ("" if cfg.prev_rank else "本次未输入上次名次，只按本次名次给分。"))
     if "前10名每人加分" in W:
         rule.append(f"前10名加分：全级总分前10名（同分计入）每有一人，本班加 {W['前10名每人加分']:g} 分。")

@@ -20,7 +20,8 @@ from verify_excel import verify, verify_compare   # noqa: E402
 T = str(ROOT / "samples" / "示例任课总表.xlsx")
 PREV = "九1=3 九2=6 九3=1 九4=5 九5=4 九6=2"
 # (登分表, 方案, 升学比例, 上次名次, 满分)
-FULL = "生物=50 地理=50 体育=50"      # 这三科在学校设置里满分还没定，示例数据按 50 分造的
+FULL = "生物=50 地理=50 体育=50"
+ENROLLED = "九1=46 九2=60 九3=45 九4=80 九5=46 九6=90"      # “参考率大”那种情况用：九2、九4、九6 的参考率明显偏低      # 这三科在学校设置里满分还没定，示例数据按 50 分造的
 CASES = [("七年级", "平时", None, "", FULL),
          ("八年级", "平时", None, "", FULL),
          ("九年级", "平时", None, PREV, ""),
@@ -28,7 +29,8 @@ CASES = [("七年级", "平时", None, "", FULL),
          ("中考", "中考", 0.8, "", FULL),
          ("九年级+新科目", "平时", None, PREV, "信息技术=50"),   # 登分表里加一门科目总表没有的科目
          ("九年级+改比例", "平时", None, PREV, ""),               # 在界面里改过比例（平时方案加了进线率、前10名加分）
-         ("九年级+改比例", "中考", 0.8, PREV, "")]                # 中考方案加了增值评价、去掉参考率
+         ("九年级+改比例", "中考", 0.8, PREV, ""),                # 中考方案加了增值评价、去掉参考率
+         ("九年级+参考率大", "平时", None, PREV, "")]              # 参考率分值很大：按小计排和按两率一分排不一样，增值评价必须按两率一分
 
 
 # 和上次比：(本次的方案, 升学比例, 本次满分, 本次加不加一门新科目)。“上次”都是九年级示例、平时方案。
@@ -124,6 +126,15 @@ def main():
             cmd += ["--上次名次", prev] if prev else []
             cmd += ["--满分", full] if full else []
             local = None
+            if grade.endswith("+参考率大"):                     # 应考人数各班差得多，参考率拉开名次
+                import yaml
+                local = tmp / "本校设置_参考率大.yaml"
+                local.write_text(yaml.safe_dump({"结构分方案": {
+                    "平时": {"平均成绩": 10, "全科合格率": 1, "全科优秀率": 1, "参考率": 83, "增值评价": 5, "增值名次差": 0.1, "增值进退步": 0.05},
+                    "中考": {"平均成绩": 50, "全科合格率": 15, "全科优秀率": 15, "参考率": 10, "进线率": 10}}}, allow_unicode=True), encoding="utf-8")
+                scores = str(ROOT / "samples" / "示例登分表_九年级.xlsx")
+                cmd[3] = scores
+                cmd += ["--本校设置", str(local), "--应考", ENROLLED]
             if grade.endswith("+改比例"):                       # 界面里改过比例：单科得分 30/20/50，结构分各项都用上
                 import yaml
                 local = tmp / "本校设置.yaml"
@@ -141,7 +152,8 @@ def main():
             xlsx = tmp / "out" / name / f"{name}_各班综合统计.xlsx"
             subprocess.run([soffice, "--headless", "--calc", "--convert-to", "xlsx", "--outdir", str(tmp / "re" / name), str(xlsx)],
                            check=True, capture_output=True, timeout=300)
-            n, errs = verify(scores, tmp / "re" / name / xlsx.name, T, scheme, ratio, "", prev, full, local=local)
+            n, errs = verify(scores, tmp / "re" / name / xlsx.name, T, scheme, ratio, ENROLLED if grade.endswith("+参考率大") else "",
+                             prev, full, local=local)
             total += n
             bad += len(errs)
             print(f"{grade} {scheme}方案：核对 {n} 项，不一致 {len(errs)} 项")

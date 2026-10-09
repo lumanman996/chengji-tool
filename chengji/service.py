@@ -10,17 +10,20 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import time
 from pathlib import Path
 
-from .analysis import RATE_ITEMS, Result, analyze, draft_conclusions
+from .analysis import RATE_ITEMS, TWO_RATES, Result, analyze, draft_conclusions
 from .config import School, load_enrolled, load_teachers, make_config
 from .loader import ScoreData, check_data, load_scores
 
 RUN_FILE = "结果.json"          # 每次核算存一份，供“最近的考试”回看
 RUN_COPY = "登分表副本.xlsx"    # 当时用的登分表，回看时导出要用它重算
+RULE = 2                        # 结果.json 里记的算法版本。2 = 增值评价按“两率一分”排名（2026-10-09 更正；1 = 旧的“其他各项小计”）
+OLD_BACKUP = "结果_旧规则备份.json"
 
 
 def clean_name(text: str) -> str:
@@ -329,7 +332,7 @@ def save_run(output_root, source_path, opts: dict, view: dict) -> Path:
     src, dst = Path(source_path), out / RUN_COPY
     if src.resolve() != dst.resolve():
         shutil.copy2(src, dst)
-    meta = {"savedAt": time.strftime("%Y-%m-%d %H:%M"), "opts": {**opts, "exam": view["exam"], "grade": view["grade"]}, "view": view}
+    meta = {"savedAt": time.strftime("%Y-%m-%d %H:%M"), "rule": RULE, "opts": {**opts, "exam": view["exam"], "grade": view["grade"]}, "view": view}
     (out / RUN_FILE).write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     return out
 
@@ -369,8 +372,45 @@ def last_run_for(output_root, grade: str, not_name: str = "") -> dict | None:
         return None
     v = best[1]
     return {"name": v["exam"], "date": v.get("date") or "",
-            "ranks": {x["name"]: x["名次"] for x in v["structure"]},
+            "ranks": two_rate_ranks(v["structure"]),
             "enrolled": {x["name"]: x["应考人数"] for x in v["structure"] if not x.get("应考按实考")}}
+
+
+def two_rate_ranks(structure: list[dict]) -> dict:
+    """各班的两率一分名次（增值评价下次要用的“上次名次”）。旧规则存下的结果里没有这一项，就用存下的各项得分现算。"""
+    if all("两率一分名次" in x for x in structure):
+        return {x["name"]: x["两率一分名次"] for x in structure}
+    base = {x["name"]: sum(x.get(k + "分", 0) for k in TWO_RATES) for x in structure}
+    return {c: 1 + sum(1 for v in base.values() if v > b + 1e-9) for c, b in base.items()}
+
+
+def upgrade_runs(output_root, school: School, teacher_path=None) -> list[str]:
+    """以前按旧规则（增值评价按“其他各项小计”排名）算的考试，用当时的登分表副本和设置按新规则重算一遍。
+    旧的结果另存为“结果_旧规则备份.json”。重算不了的（登分表副本丢了等）保持原样。返回重算了的考试名称。"""
+    done = []
+    root = Path(output_root)
+    for f in sorted(root.glob(f"*/{RUN_FILE}")) if root.is_dir() else []:
+        try:
+            text = f.read_text(encoding="utf-8")
+            m = json.loads(text)
+            if int(m.get("rule") or 1) >= RULE:
+                continue
+            src = f.parent / RUN_COPY
+            if not src.is_file():
+                continue
+            R, concl, msgs = compute(src, school, m["opts"], teacher_path)
+            view = to_view(R, concl, msgs)
+            backup = f.parent / OLD_BACKUP
+            if not backup.exists():
+                backup.write_text(text, encoding="utf-8")
+            m.update(view=view, rule=RULE)
+            st = f.stat()
+            f.write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+            os.utime(f, (st.st_atime, st.st_mtime))                # “最近的考试”按这个时间排序，不能因为重算就变了
+            done.append(view["exam"])
+        except Exception:
+            continue
+    return done
 
 
 DELETED = "已删除"          # 删掉的考试移到 output/已删除/ 里，需要时可以找回

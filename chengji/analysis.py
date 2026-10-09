@@ -149,6 +149,7 @@ def analyze(data: ScoreData, cfg: Config) -> Result:
 
 # ---------------- 班级结构分 ----------------
 RATE_ITEMS = ["平均成绩", "全科合格率", "全科优秀率", "参考率", "进线率"]   # 比率 × 分值 的各项
+TWO_RATES = ["平均成绩", "全科合格率", "全科优秀率"]                       # “两率一分”（二率一分）：增值评价按它排名
 
 
 def _rank_desc(vals: dict) -> dict:
@@ -158,7 +159,10 @@ def _rank_desc(vals: dict) -> dict:
 
 def structure_scores(R: Result) -> dict:
     """班级结构分。各项直接按比例折分（比率 × 分值），再加增值评价、前10名加分。
-    没有填应考人数的班，应考人数按实考人数算（参考率 100%，这一项拿满分）。"""
+    没有填应考人数的班，应考人数按实考人数算（参考率 100%，这一项拿满分）。
+    增值评价（2026-10-09 按上级文件更正）：按“两率一分”（平均成绩 + 全科合格率 + 全科优秀率 三项得分之和）排名，
+    第 1 名得满分，每低一名减“增值名次差”；再和上次考试的两率一分名次比，每进步（退步）一名加（减）“增值进退步”；
+    最高不超过满分。参考率、进线率不参与这个排名。"""
     cfg, df = R.cfg, R.df
     W = cfg.structure
     all_pass = pd.Series(True, index=df.index)
@@ -187,20 +191,21 @@ def structure_scores(R: Result) -> dict:
                 x[k] = rate[k]
                 x[k + "分"] = rate[k] * W[k]
         x["小计"] = sum(x[k + "分"] for k in RATE_ITEMS if k in W)
+        x["两率一分"] = sum(x[k + "分"] for k in TWO_RATES if k in W)
         x["前10名人数"] = int((df.loc[m, "总分"] >= top10_line).sum())
         x["加分"] = x["前10名人数"] * W.get("前10名每人加分", 0)
         out[c] = x
 
-    sub_rank = _rank_desc({c: out[c]["小计"] for c in R.classes})
+    base_rank = _rank_desc({c: out[c]["两率一分"] for c in R.classes})
     for c in R.classes:
         x = out[c]
-        x["小计名次"] = sub_rank[c]
+        x["两率一分名次"] = base_rank[c]
         x["上次名次"] = cfg.prev_rank.get(c)
         x["增值评价分"] = 0.0
         if "增值评价" in W:
-            v = W["增值评价"] - W.get("增值名次差", 0.1) * (sub_rank[c] - 1)
-            if x["上次名次"]:
-                v += (x["上次名次"] - sub_rank[c]) * W.get("增值进退步", 0.05)   # 进步为正
+            v = W["增值评价"] - W.get("增值名次差", 0.1) * (base_rank[c] - 1)
+            if x["上次名次"]:                                                   # 上次的两率一分名次
+                v += (x["上次名次"] - base_rank[c]) * W.get("增值进退步", 0.05)   # 进步为正
             x["增值评价分"] = min(v, W["增值评价"])
         x["结构分"] = x["小计"] + x["增值评价分"] + x["加分"]
     final = _rank_desc({c: out[c]["结构分"] for c in R.classes})
