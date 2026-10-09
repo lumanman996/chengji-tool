@@ -147,7 +147,7 @@ pip install -r requirements-dev.txt
 python -m pytest -q                 # 单元测试 + 界面端到端测试（只用虚构数据）
 python tests/verify_all.py          # 用 LibreOffice 重算导出的 Excel，与程序独立计算逐项核对（必须 0 处不一致）
 python tools/make_templates.py      # 重新生成模板和虚构示例数据
-python packaging/build.py           # 打包成双击就能用的程序（Windows / Mac）
+python packaging/build.py           # 打包成双击就能用的程序（Windows / Mac）；有验证模块时先编译成机器码（要装 Cython）
 python packaging/smoke_test.py      # 用打好的程序自检、试跑，再走一遍一键更新
 ```
 
