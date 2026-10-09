@@ -50,11 +50,23 @@ def main():
     run("--自检")
     info = json.loads((HOME / "自检结果.json").read_text(encoding="utf-8"))
     print("自检：", info)
-    assert info["ok"] and info["license"] in ("open", "trial", "active"), info
+    assert info["ok"] and info["license"] in ("open", "trial", "active", "expired"), info
+    expired = info["license"] == "expired"                 # 在本机试跑时，这台电脑的试用可能已经到期（GitHub 上每次都是新电脑）
+    if expired:
+        print("（提醒）这台电脑的试用已到期：跳过需要导出的两步试跑，直接检查一键更新。在 GitHub 上打包时每次都是完整试跑。")
     for f in ("config/学校设置.yaml", "templates/登分表_九年级.xlsx", "samples/示例登分表_九年级.xlsx"):
         assert (HOME / f).is_file(), f"没有放出 {f}"
     T = HOME / "samples" / "示例任课总表.xlsx"
 
+    if not expired:
+        try_samples(T)
+    check_online()
+    update_flow(info["license"])
+    shutil.rmtree(HOME, ignore_errors=True)
+    print("试跑全部通过。")
+
+
+def try_samples(T):
     # 2) 九年级、平时方案、全部 PDF 内容
     name = "试跑_九年级"
     run(HOME / "samples" / "示例登分表_九年级.xlsx", "--任课", T, "--考试", name, "--上次名次", "九1=3 九2=6 九3=1 九4=5 九5=4 九6=2", "--不确认")
@@ -70,11 +82,6 @@ def main():
     name = "试跑_中考核算"
     run(HOME / "samples" / "示例登分表_中考.xlsx", "--任课", T, "--考试", name, "--方案", "中考", "--满分", "生物=50 地理=50 体育=50", "--PDF内容", "0", "--不确认")
     assert (HOME / "output" / name / f"{name}_各班综合统计.xlsx").is_file()
-
-    check_online()
-    update_flow(info["license"])
-    shutil.rmtree(HOME, ignore_errors=True)
-    print("试跑全部通过。")
 
 
 def check_online():
